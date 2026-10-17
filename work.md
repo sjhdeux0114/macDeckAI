@@ -237,5 +237,20 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
   - 아키텍처 다이어그램, 디렉터리 구조, 빌드/실행 가이드, 보안 및 라이선스 고지 포함.
 - 보안 및 저장소 정비:
   - `.gitignore`에 일시적 QR 스크린샷(`evidence/steam-setup/big-picture-login.png`) 및 인증 관련 파일 패턴 추가하여 민감 정보 유출 방지.
-  - Git 로컬 저장소 초기화(`git init`), 브랜치를 `main`으로 설정, 원격 저장소 `origin`(https://github.com/sjhdeux0114/macDeckAI.git) 설정 완료.
   - GitHub CLI 인증 연동 후 `main` 브랜치로 초기 커밋(114개 파일, 약 3.2MB) 및 원격 푸시 완료.
+
+### 2026-10-18 — 3D 게임 (Resident Evil 3) D3D12CreateDeviceFailed 에러 로그 분석
+
+- 사용자 보고: 3D 게임 실행 시 `D3D12CreateDeviceFailed` (renderdevicedx12.cpp line 11769) 에러 발생 및 원인 로그 요청.
+- 확인된 실행 게임: **Resident Evil 3 (RE3, AppID: 952060)**, 외장 드라이브 `E:\SteamLibrary\steamapps\common\RE3\re3.exe`.
+  - 외장 드라이브(NVMe_1T) 연동 및 실제 Steam을 통한 24.9 GB 대용량 게임 다운로드/설치는 정상 동작함을 확인.
+- 관련 로그 확인:
+  - `~/Library/Application Support/MacDeck/Logs/Sessions/2026-10-17T14-54-31Z-D60BEB33-7A54-45A5-9F23-D6DFD57D66B0/Renderer/re3_dxgi.log`: `warn: DXGIAdapter: Unknown interface query 17399d75-964e-4c03-99f8-9d4fd196dd62`
+  - Steam `logs/gameprocess_log.txt`: `[23:54:58] AppID 952060 adding PID 1316 as a tracked process "E:\SteamLibrary\steamapps\common\RE3\re3.exe"`, `[23:55:14] exit code 1`
+  - 게임 설정 파일 (`re3_config.ini`): `[Render] Capability=DirectX12`
+  - 게임 폴더: `D3D12/D3D12Core.dll` (DirectX 12 Agility SDK 번들 확인)
+- 실패 원인 분석:
+  - RE3는 Capcom 차세대 패치(Next-Gen Update)로 인해 기본 렌더러가 DirectX 12(Agility SDK)로 강제 설정됨.
+  - 현재 MacDeck의 그래픽 가속 레이어는 **DXMT 0.80 (Direct3D 10/11 -> Apple Metal)** 기반으로, D3D12를 Metal로 변환하는 레이어가 없어 `D3D12CreateDevice` 실패 발생.
+- 해결 방안:
+  - Steam 속성 → 베타(Betas) 탭에서 Capcom이 공식 제공하는 **`dx11_non-rt`** 브랜치로 전환하여 Direct3D 11 모드로 구동 (DXMT Metal 가속 경로 활성화).
