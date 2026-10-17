@@ -16,7 +16,7 @@
 - Bluetooth DualShock 4를 Apple GameController 및 Wine과 같은 SDL2에서 인식하고 실제 버튼/축 변화 확인. Windows/Steam/게임 내부 조작은 아직 별도 검증 필요.
 - v0.4: 외장 폴더의 실제 Steam 등록·연결 해제(파일 유지), 중복 설치 폴더 방지, 실행별 구조화된 진단·GPU 단서 요약·ZIP 내보내기 제공.
 - **Steam 계정 인증, Steam 게임 다운로드·실행, Steam 게임의 Metal 가속은 아직 미검증**이다. 사용자의 로그인 완료 응답은 아직 받지 않았다.
-- 작업 폴더를 Git 저장소로 초기화하고 원격 저장소(`https://github.com/sjhdeux0114/macDeckAI.git`, branch `main`)로 푸시 준비.
+- 작업 폴더를 Git 저장소로 초기화하고 원격 저장소(`https://github.com/sjhdeux0114/macDeckAI.git`, branch `main`)로 초기 커밋 및 푸시 완료.
 
 ## 사용자 목표 및 이미 받은 승인
 
@@ -238,3 +238,4 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
 - 보안 및 저장소 정비:
   - `.gitignore`에 일시적 QR 스크린샷(`evidence/steam-setup/big-picture-login.png`) 및 인증 관련 파일 패턴 추가하여 민감 정보 유출 방지.
   - Git 로컬 저장소 초기화(`git init`), 브랜치를 `main`으로 설정, 원격 저장소 `origin`(https://github.com/sjhdeux0114/macDeckAI.git) 설정 완료.
+  - GitHub CLI 인증 연동 후 `main` 브랜치로 초기 커밋(114개 파일, 약 3.2MB) 및 원격 푸시 완료.
