@@ -5,17 +5,17 @@
 ## 현재 상태 — 2026-10-18
 
 - 프로젝트: `/Users/sjhdeux/Documents/macdeck`
-- 현재 앱: **MacDeck 0.5.0**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
+- 현재 앱: **MacDeck 0.5.1**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
 - 빌드 결과: `dist/MacDeck.app`
 - 설치된 앱: `/Users/sjhdeux/Applications/MacDeck.app`
 - 실제 호스트: Apple M5, 메모리 24 GiB, macOS 27.0.1. 최소 배포 대상 macOS 13은 빌드 설정이며 다른 기기에서 검증한 것은 아니다.
-- 구현: 네이티브 라이브러리, Windows 게임 실행, **Direct3D 10/11(DXMT) 및 Direct3D 12(VKD3D + MoltenVK) → Apple Metal 가속**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
-- 최종 자체 검사 **68개 통과**, 앱 빌드·서명 확인 성공.
+- 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **macOS Game Mode(`Game Mode: On`) 활성화 지원**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
+- 최종 자체 검사 **69개 통과**, 앱 빌드·서명 확인 성공.
 - 실제 Windows Brogue CE 던전 렌더링 및 **M5 Metal HUD 확인 성공**.
 - 실제 Windows Steam 로그인 완료 및 외장 NVMe 드라이브(`E:\SteamLibrary`)에 Steam 게임 4종(Resident Evil 3, Balatro, Halls of Torment, No Results Found) 다운로드·설치 확인 성공.
-- **Direct3D 12 3D 게임(Resident Evil 3, `re3.exe`) 실행 및 Apple M5 Metal 3(VKD3D 1.14 → winevulkan → MoltenVK 1.4.1) 창 생성·스왑체인 Present 확인 성공**.
+- **Direct3D 12 3D 게임(Resident Evil 3, `re3.exe`) 실행 및 Apple M5 Metal 3(VKD3D 1.14 → winevulkan → MoltenVK 1.4.1) 전체화면(`2704x1756`, `38.45 FPS`) 렌더링 확인 성공** (단, Wine 10 내장 VKD3D 1.14의 RE Engine DX12 한계로 진행 중 크래시가 발생하므로 기본 전역 모드를 **DX11 Mode**로 설정하고 설정에서 전환 가능하게 구성).
 - Bluetooth DualShock 4를 Apple GameController 및 Wine과 같은 SDL2에서 인식하고 실제 버튼/축 변화 확인. Windows/Steam/게임 내부 조작은 아직 별도 검증 필요.
-- v0.5: Direct3D 12(VKD3D/MoltenVK) + Direct3D 10/11(DXMT) 공존 브리지, 게임별 그래픽 백엔드 자동 감지/선택, 앱 실행 시 설정된 외장 게임 설치 폴더 자동 연결·인식 복구 제공.
+- v0.5.1: 모든 게임에 공통 적용되는 **전역 DX11 Mode / DX12 Mode 설정**(상단 툴바, 런타임 설정, Steam 설정에서 즉시 전환 및 Steam 자동 재시작 반영), `MacDeck.app` 및 내장 `wine` 바이너리 `__TEXT,__info_plist`의 **macOS Game Mode(`public.app-category.games`, `LSSupportsGameMode`, `GCSupportsGameMode`) 활성화 패치**, 앱 시작 시 외장 설치 폴더 자동 연결 제공.
 - 작업 폴더를 Git 저장소로 초기화하고 원격 저장소(`https://github.com/sjhdeux0114/macDeckAI.git`, branch `main`)로 커밋 및 푸시 완료.
 
 ## 사용자 목표 및 이미 받은 승인
@@ -294,3 +294,38 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
   - `AGENTS.md`: 코드나 설정을 수정할 때마다 `work.md`에 누적 수정내역을 추가하고, `README.md`에도 변경내역(Changelog 및 기능/검증 현황)을 함께 누적 갱신하도록 작업 지침 명문화.
   - `README.md`: 하단에 `📋 변경 내역 (Changelog)` 섹션을 신설하여 `v0.1.0` ~ `v0.5.0`까지의 버전별 주요 변경·개선·검증 내역을 정리하고 이후 수정 시 계속 누적되도록 구성.
   - `work.md`: 본 작업 이력 누적 추가.
+
+### 2026-10-18 — 전역 DX11 Mode / DX12 Mode 전환 설정 및 macOS Game Mode 활성화 (v0.5.1)
+
+- 사용자 요청:
+  1. "Game Mode 가 Off로 되어있는데 On으로 설정해줘"
+  2. "오류발생해 그냥 dx11 로 해야할거같아"
+  3. "설정에서 dx11 mode, dx12 mode 선택해서 플레이 할수 있게 하자. 일단 dx12 는 오류가 있는건 어쩔수없는거같아"
+  4. "re3만 dx11 mode , dx12 mode 고르는게 아니게 모든 게임에 전역으로 설정 되어야 해"
+- 분석 및 원인 확인:
+  - **DX12 전체화면 진입 및 크래시 원인**: Resident Evil 3 (`re3.exe`)가 DX12 Mode(VKD3D 1.14 + MoltenVK 1.4.1)로 Apple M5 Metal 3 전체화면(`2704x1756`, Metal 메모리 `2.27GB`, `38.45 FPS`) 렌더링까지 진입했으나, Wine 10 내장 VKD3D 1.14 + MoltenVK의 RE Engine DX12 파이프라인 한계로 타이틀 진입 직후 크래시 발생.
+  - **전역 DX11 Mode / DX12 Mode 분리 필요성**: `re3.exe` 바이너리 역어셈블(`0x142c9f302` ~ `0x142c9f670`) 결과 `LoadLibraryW(L"d3d12.dll")`가 실패(`NULL`)하면 `re3_config.ini`에 `Capability=DirectX11` 및 `TargetPlatform=DirectX11`을 기록하고 내장된 `RenderDeviceDX11`(`0x142f892c0`)을 생성하는 구조임을 확인. 따라서 **DX11 Mode**에서는 런타임 `dxgi.dll`을 DXMT로 전환하고 `WINEDLLOVERRIDES`에서 `d3d12,d3d12core=`를 비활성화하여 모든 멀티 API 게임이 DX11(DXMT → Metal) 경로로 동작하도록 구성.
+  - **macOS Game Mode(`Game Mode: Off`) 원인**: macOS `/usr/libexec/gamepolicyd`는 전체화면 Metal 창을 소유한 프로세스(`Runtime/bin/wine` 및 `MacDeck.app`)의 `Info.plist`(`LSApplicationRecord`)에서 `LSApplicationCategoryType = public.app-category.games`, `LSSupportsGameMode = true`, `GCSupportsGameMode = true`를 확인함. 기존 `Runtime/bin/wine`의 내장 `__TEXT,__info_plist` 섹션에는 `<key>LSUIElement</key><string>1</string>`이 들어 있었고 게임 카테고리 키가 없었음.
+- 변경 파일 및 내용:
+  - `scripts/prepare-metal-runtime.py`:
+    - `Runtime/lib/wine/dxgi-dxmt/{x86_64-windows,i386-windows}/dxgi.dll`(DXMT 1.89MB)과 `Runtime/lib/wine/dxgi-d3d12/{x86_64-windows,i386-windows}/dxgi.dll`(Wine 원본 237KB)을 각각 보존하여 전역 모드 전환 시 런타임 레벨에서 즉시 교체되도록 구성.
+    - `Runtime/bin/wine` 실행 파일 내부 `__TEXT,__info_plist` 섹션(정확히 936바이트 길이 유지)에서 `LSUIElement=1`을 제거하고 `LSApplicationCategoryType=public.app-category.games`, `LSSupportsGameMode=true`, `GCSupportsGameMode=true`를 패치 후 ad-hoc 재서명.
+  - `scripts/build-mac-app.sh`:
+    - `MacDeck.app/Contents/Info.plist` 버전을 `0.5.1` (`CFBundleVersion = 7`)로 올리고 `LSApplicationCategoryType=public.app-category.games`, `LSSupportsGameMode=true`, `GCSupportsGameMode=true` 추가.
+  - `Sources/MacDeck/Library.swift`:
+    - `GraphicsBackend`를 전역 `dxmt` (**DX11 Mode**) / `d3d12` (**DX12 Mode**) 2가지 모드로 정리(기존 `"auto"` JSON 값은 기본값 `.dxmt`로 호환 디코딩).
+    - `LibraryData`에 전역 `graphicsBackend: GraphicsBackend?` 추가(기본값 `.dxmt` = **DX11 Mode**).
+    - `DirectX12Support.applyGlobal(mode:wine:games:)`: 전역 모드에 따라 `Runtime/lib/wine/{x86_64-windows,i386-windows}/dxgi.dll`을 `dxgi-dxmt`(DX11) 또는 `dxgi-d3d12`(DX12)로 전환하고, 게임 폴더 내 관리 대상 `dxgi.dll`을 정리하며, 게임 `.ini` 설정 파일의 `Capability`/`TargetPlatform`을 `DirectX11` 또는 `DirectX12`로 동기화.
+    - `DirectX12Support.dllOverrides(for:)`:
+      - **DX11 Mode (`.dxmt`)**: `d3d11,dxgi,d3d10core,winemetal=b;d3d12,d3d12core=` (`d3d12`/`d3d12core` 비활성화 → DX11 강제).
+      - **DX12 Mode (`.d3d12`)**: `dxgi,d3d12,d3d12core,vulkan-1,winevulkan,d3d11,d3d10core,winemetal=b` + `MVK_CONFIG_RESUME_LOST_DEVICE=1`.
+  - `Sources/MacDeck/Runtime.swift`:
+    - `DeckModel.setGraphicsBackend(_:)`: 전역 그래픽 모드 변경 시 `library.json` 저장, 런타임 및 전체 게임 폴더 즉시 동기화, Steam이 실행 중이면 자동으로 정상 종료(`stopAndWait`) 후 새 전역 모드 환경변수로 Steam을 재시작(`launchSteam`).
+  - `Sources/MacDeck/App.swift`:
+    - 상단 툴바(모든 화면에서 즉시 전환 가능한 `DX11 Mode` / `DX12 Mode` 세그먼트 선택기), `런타임` 탭의 `전역 그래픽 모드 (모든 게임 공통)` 패널, `Steam` 탭의 `Steam 전용 환경 및 전역 그래픽 모드` 패널, 게임 실행 설정 시트에 전역 모드 선택기 배치.
+  - `Sources/MacDeck/SelfTests.swift`:
+    - 전역 DX11 Mode 기본 오버라이드(`d3d12,d3d12core=` 비활성화), 전역 DX11/DX12 모드 전환 시 런타임 `dxgi.dll` 교체 및 `.ini` 동기화, 서드파티 `dxgi.dll` 보존을 포함한 **69개 자체 검사**로 확장.
+- 실제 실행한 검증과 결과:
+  - `bash scripts/package-mac-app.sh` 실행 → **69 checks passed** (`evidence/v051-global-mode-tests.log`), `codesign --verify --strict dist/MacDeck.app` 통과.
+  - `Runtime/bin/wine` 내장 `__TEXT,__info_plist` 및 `dist/MacDeck.app/Contents/Info.plist`에 `public.app-category.games`, `LSSupportsGameMode`, `GCSupportsGameMode` 반영 및 서명 검증 완료.
+

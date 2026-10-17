@@ -65,20 +65,55 @@ for arch, expected_size in [("x86_64-windows", 237568), ("i386-windows", 225294)
             shutil.copy2(backup_wine_dxgi, cached_wine_dxgi)
         else:
             subprocess.run(["tar", "-xf", str(cache / "wine-steam10.tar.xz"), "-C", str(cache / "wine-steam10"), f"wswine.bundle/lib/wine/{arch}/dxgi.dll"], check=True)
-    shutil.copy2(cached_wine_dxgi, runtime / "lib/wine" / arch / "dxgi.dll")
-    wine_dxgi = runtime / "lib/wine" / arch / "dxgi.dll"
     d3d12_dxgi_dir = runtime / "lib/wine/dxgi-d3d12" / arch
     d3d12_dxgi_dir.mkdir(parents=True, exist_ok=True)
-    raw = wine_dxgi.read_bytes()
-    if b"Wine builtin DLL" in raw:
-        raw = raw.replace(b"Wine builtin DLL", b"Wine native  DLL", 1)
-    (d3d12_dxgi_dir / "dxgi.dll").write_bytes(raw)
+    shutil.copy2(cached_wine_dxgi, d3d12_dxgi_dir / "dxgi.dll")
 
 dxmt = cache / "dxmt/v0.80"
 for directory in ["x86_64-unix", "x86_64-windows", "i386-windows"]:
     for name in ["winemetal.so", "winemetal.dll", "d3d11.dll", "dxgi.dll", "d3d10core.dll"]:
         source = dxmt / directory / name
-        if source.exists(): shutil.copy2(source, runtime / "lib/wine" / directory / name)
+        if source.exists():
+            shutil.copy2(source, runtime / "lib/wine" / directory / name)
+            if name == "dxgi.dll" and directory in ("x86_64-windows", "i386-windows"):
+                dxmt_dxgi_dir = runtime / "lib/wine/dxgi-dxmt" / directory
+                dxmt_dxgi_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, dxmt_dxgi_dir / "dxgi.dll")
+
+wine_bin = runtime / "bin/wine"
+if wine_bin.exists():
+    wine_bytes = wine_bin.read_bytes()
+    plist_start = wine_bytes.find(b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+    plist_end = wine_bytes.find(b"</plist>", plist_start)
+    if plist_start != -1 and plist_end != -1:
+        plist_end += len(b"</plist>\n")
+        orig_len = plist_end - plist_start
+        new_plist = (
+            b'<?xml version="1.0" encoding="UTF-8"?>\n'
+            b'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+            b'<plist version="1.0">\n<dict>\n'
+            b'<key>CFBundleAllowMixedLocalizations</key><true/>\n'
+            b'<key>CFBundleDevelopmentRegion</key><string>English</string>\n'
+            b'<key>CFBundleExecutable</key><string>wine</string>\n'
+            b'<key>CFBundleIdentifier</key><string>org.winehq.wine</string>\n'
+            b'<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n'
+            b'<key>CFBundleName</key><string>Wine</string>\n'
+            b'<key>CFBundlePackageType</key><string>APPL</string>\n'
+            b'<key>CFBundleShortVersionString</key><string>10.0</string>\n'
+            b'<key>CFBundleSignature</key><string>????</string>\n'
+            b'<key>CFBundleVersion</key><string>10.0</string>\n'
+            b'<key>NSPrincipalClass</key><string>WineApplication</string>\n'
+            b'<key>LSApplicationCategoryType</key><string>public.app-category.games</string>\n'
+            b'<key>LSSupportsGameMode</key><true/>\n'
+            b'<key>GCSupportsGameMode</key><true/>\n'
+        )
+        closing = b'</dict>\n</plist>\n'
+        pad_len = orig_len - len(new_plist) - len(closing)
+        if pad_len >= 0:
+            patched_plist = new_plist + (b" " * pad_len) + closing
+            assert len(patched_plist) == orig_len
+            wine_bin.write_bytes(wine_bytes[:plist_start] + patched_plist + wine_bytes[plist_end:])
+            subprocess.run(["codesign", "--force", "--sign", "-", str(wine_bin)], check=True)
 
 spec = importlib.util.spec_from_file_location("identity_patch", root / "scripts/patch-dxmt-identity.py")
 patcher = importlib.util.module_from_spec(spec)
@@ -103,6 +138,7 @@ manifest = {"artifacts": [{"file": n, "url": u, "sha256": h} for n, u, h in arti
                 "dxgi": "lib/wine/dxgi-d3d12/x86_64-windows/dxgi.dll",
                 "sha256": hashlib.sha256((runtime / "lib/wine/dxgi-d3d12/x86_64-windows/dxgi.dll").read_bytes()).hexdigest()
             },
-            "supportedTest": "Direct3D 10/11 via DXMT to Metal; Direct3D 12 via VKD3D + MoltenVK to Metal"}
+            "gameMode": True,
+            "supportedTest": "Global DX11 Mode (DXMT to Metal) and DX12 Mode (VKD3D + MoltenVK to Metal)"}
 (resources / "runtime-manifest.json").write_text(json.dumps(manifest, indent=2))
 print("Prepared bundled Metal runtime and Windows game", flush=True)

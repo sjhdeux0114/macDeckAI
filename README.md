@@ -21,11 +21,12 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
    - 공식 Windows Steam 클라이언트를 백그라운드 환경에 설치하고, Steam Big Picture 모드를 한 번의 클릭 또는 패드 입력으로 실행.
    - Steam 라이브러리(`libraryfolders.vdf`, `appmanifest`)를 자동 파싱하여 MacDeck 런처에 동기화.
 
-2. **Apple Metal 하드웨어 가속 듀얼 그래픽 파이프라인 (DX10/11 & DX12)**
+2. **Apple Metal 하드웨어 가속 및 전역 DX11 Mode / DX12 Mode 선택**
    - **WineSikarugir 10.0 (x86_64, Rosetta 2)** 기반 호환성 레이어.
-   - **DirectX 10 / 11 → DXMT 0.80**: Direct3D 10/11 호출을 Apple Metal로 직접 변환하며, `SetRotation(IDENTITY)` 호환 패치를 적용하여 SDL2/D3D11 게임의 OpenGL 강제 대체를 방지.
-   - **DirectX 12 → VKD3D 1.14 + MoltenVK 1.4.1**: 게임 폴더 내 Agility SDK(`D3D12Core.dll`), 설정 파일(`Capability=DirectX12`), 또는 실행 파일 임포트를 자동 감지하여 Wine D3D12 DXGI 브리지와 MoltenVK(`libvulkan.1.dylib`)를 통해 Apple Metal 3로 가속.
-   - Apple Metal HUD (`⌘F9`) 및 프레임 레이트/GPU 부하 실시간 모니터링 지원.
+   - **전역 그래픽 모드 전환 (모든 게임 공통)**: 상단 툴바, 런타임 설정, 또는 Steam 탭에서 **DX11 Mode**와 **DX12 Mode**를 선택하면 런타임의 DXGI 브리지와 DLL 오버라이드가 전역으로 전환되며, 실행 중인 Steam도 새 모드로 자동 재시작됩니다.
+   - **DX11 Mode (DXMT 0.80 · 기본 권장)**: Direct3D 10/11 호출을 Apple Metal로 직접 변환하며, `d3d12`/`d3d12core`를 비활성화하여 멀티 API 게임을 안정적인 DirectX 11 경로로 유도합니다.
+   - **DX12 Mode (VKD3D 1.14 + MoltenVK 1.4.1 · 실험적)**: Wine D3D12 DXGI 브리지와 MoltenVK(`libvulkan.1.dylib`)를 통해 Direct3D 12를 Apple Metal 3로 가속합니다.
+   - **macOS Game Mode (`Game Mode: On`) & Apple Metal HUD**: `MacDeck.app` 및 내장 `wine` 실행 파일의 `Info.plist`에 `public.app-category.games`, `LSSupportsGameMode`, `GCSupportsGameMode`를 설정하여 전체화면 게임 시 macOS 게임 모드와 Metal HUD를 지원합니다.
 
 3. **외장 SSD/HDD 게임 라이브러리 지원 및 시작 시 자동 연결**
    - 내장 SSD 용량이 부족한 Mac 환경을 위해 외장 저장장치(NVMe/SSD/HDD)의 게임 설치 폴더를 Wine 가상 드라이브(`E:\SteamLibrary` 등)로 매핑.
@@ -54,18 +55,17 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
 - **향후 계획:**
   - 1차 검증은 완료되었으나, DirectDraw, Direct3D 9, SDL 소프트웨어 렌더러, 레거시 OpenGL 등 다양한 그래픽 엔진을 사용하는 **더 많은 종류의 2D 인디/클래식 게임을 추가 테스트**하여 호환성을 폭넓게 확보할 예정입니다.
 
-### 🎲 3D 게임: DX11(DXMT) & DX12(VKD3D/MoltenVK) 파이프라인 구축 및 집중 테스트 진행 중
+### 🎲 3D 게임: 전역 DX11 Mode(DXMT) & DX12 Mode(VKD3D/MoltenVK) 구축 및 집중 테스트 진행 중
 - **현재 상태:**
-  - **Direct3D 10/11 (DXMT → Metal)** 및 **Direct3D 12 (VKD3D 1.14 → winevulkan → MoltenVK 1.4.1 → Metal 3)** 듀얼 가속 파이프라인이 구축되어 있습니다.
-  - 외장 NVMe 드라이브(`E:\SteamLibrary`)에 설치된 **Resident Evil 3 (`re3.exe`, DirectX 12)** 실행 시 Apple M5 Metal 3 장치 생성 및 스왑체인 렌더링(`d3d12_swapchain_Present`) 초기 구동 확인을 완료했습니다.
-  - 각 게임 실행 설정에서 그래픽 백엔드를 **자동 감지(DX11/DX12)** 하거나 수동으로 전환할 수 있습니다.
+  - **DX11 Mode (DXMT → Metal · 기본 권장)** 및 **DX12 Mode (VKD3D 1.14 → winevulkan → MoltenVK 1.4.1 → Metal 3 · 실험적)** 전역 전환 파이프라인이 구축되어 있습니다.
+  - 외장 NVMe 드라이브(`E:\SteamLibrary`)에 설치된 **Resident Evil 3 (`re3.exe`)** 실행 시 Apple M5 Metal 3 전체화면(`2704x1756`, `38.45 FPS`) 스왑체인 렌더링을 확인했으며, 안정적인 플레이를 위해 전역 기본값을 **DX11 Mode**로 제공합니다.
 - **향후 계획:**
   - 3D 게임은 복잡한 셰이더 연산, 엔진별 DirectX 11/12 특성, 안티치트(Anti-Cheat) 솔루션, 런타임 종속성(Visual C++ 재배포 패키지 등), 장시간 플레이 안정성 등 다양한 변수가 존재하므로 **앞으로도 다양한 3D 타이틀을 대상으로 테스트를 집중적으로 많이 수행해봐야 하는 단계**입니다.
   - 진단 시스템을 활용하여 각 3D 타이틀별 오류 패턴을 분석하고 순차적으로 호환성을 개선해 나갈 계획입니다.
 
 ### ☁️ Steam 클라이언트 및 외장 스토리지 연동
 - Valve 공식 Windows `SteamSetup.exe`를 통한 설치, 최신 클라이언트 업데이트, Big Picture 로그인 및 외장 NVMe SSD(`E:\SteamLibrary`) 게임 다운로드·설치 검증 완료.
-- 앱 재실행 시 설정된 외장 게임 설치 폴더 자동 재연결 및 총 **68개 자체 검증 테스트(`--self-test`) 통과**.
+- 앱 재실행 시 설정된 외장 게임 설치 폴더 자동 재연결 및 총 **69개 자체 검증 테스트(`--self-test`) 통과**.
 
 ---
 
@@ -75,7 +75,7 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
 ┌─────────────────────────────────────────────────────────────────┐
 │                    MacDeck.app (SwiftUI / AppKit arm64)         │
 │  - 라이브러리 관리       - 외장 드라이브 자동 연결 - 게임패드 내비게이션 │
-│  - 진단 및 ZIP 내보내기  - DX11/DX12 자동 감지   - 세션 로깅          │
+│  - 진단 및 ZIP 내보내기  - 전역 DX11/DX12 모드 전환 - 세션 로깅         │
 └─────────────────────────────────┬───────────────────────────────┘
                                   │ 실행 (LaunchPlan)
                                   ▼
@@ -83,14 +83,14 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
 │               Rosetta 2 + WineSikarugir 10.0-8 (x86_64)         │
 │  - Windows 환경 에뮬레이션 (drive_c, dosdevices)                  │
 │  - Windows Steam (Big Picture) & Windows Game .exe              │
-│  - Builtin XInput 게임패드 지원                                   │
+│  - Builtin XInput 게임패드 지원 / macOS Game Mode 활성화          │
 └──────────────────┬──────────────────────────────┬───────────────┘
-   Direct3D 10/11  │                              │ Direct3D 12
+   DX11 Mode (기본) │                              │ DX12 Mode (선택)
                    ▼                              ▼
 ┌──────────────────────────────────┐ ┌────────────────────────────┐
 │  DXMT 0.80 (SetRotation 패치)    │ │ Wine D3D12 (VKD3D 1.14)    │
-│  - D3D10/11 → Metal 직접 변환     │ │ + Wine DXGI Native Bridge  │
-│  - _macdrv_functions Metal View  │ │ + MoltenVK 1.4.1 (Vulkan)  │
+│  - D3D10/11 → Metal 직접 변환     │ │ + Wine DXGI D3D12 Bridge   │
+│  - d3d12/d3d12core 비활성화       │ │ + MoltenVK 1.4.1 (Vulkan)  │
 └──────────────────┬───────────────┘ └────────────┬───────────────┘
                    └──────────────┬───────────────┘
                                   │ Metal 커맨드 인코딩
@@ -173,6 +173,15 @@ macDeckAI/
 ## 📋 변경 내역 (Changelog)
 
 > 세부적인 작업·검증·디버깅 누적 기록은 [`work.md`](work.md)에서 확인할 수 있습니다.
+
+### v0.5.1 (2026-10-18)
+- **전역 DX11 Mode / DX12 Mode 전환 설정 지원**:
+  - 특정 게임에만 국한되지 않고 **Steam 및 모든 Windows 게임에 전역으로 적용**되는 `DX11 Mode (DXMT → Metal · 기본 권장)` / `DX12 Mode (VKD3D · MoltenVK → Metal · 실험적)` 전환 기능을 추가했습니다.
+  - 상단 툴바 세그먼트 버튼, `런타임` 탭, `Steam` 탭, 게임 실행 설정에서 언제든 모드를 변경할 수 있으며, 모드 전환 시 런타임의 `dxgi.dll`(`dxgi-dxmt` ↔ `dxgi-d3d12`), `WINEDLLOVERRIDES`(`DX11 Mode` 시 `d3d12,d3d12core=` 비활성화), 게임 `.ini` 설정이 일괄 동기화되고 실행 중인 Steam이 자동으로 재시작됩니다.
+- **macOS Game Mode (`Game Mode: On`) 활성화**:
+  - `MacDeck.app/Contents/Info.plist` 및 내장 `Runtime/bin/wine` 바이너리의 `__TEXT,__info_plist` 섹션에서 `LSUIElement=1`을 제거하고 `LSApplicationCategoryType = public.app-category.games`, `LSSupportsGameMode = true`, `GCSupportsGameMode = true`를 패치하여 macOS `gamepolicyd`가 게임 모드를 활성화하도록 개선했습니다.
+- **자체 검증 테스트 확대**:
+  - 전역 DX11/DX12 모드 전환 및 런타임/설정 동기화 검사를 포함해 **69개 자체 검증 테스트(`--self-test`) 전수 통과**.
 
 ### v0.5.0 (2026-10-18)
 - **DirectX 12 (`VKD3D 1.14 + MoltenVK 1.4.1 → Apple Metal 3`) 지원 추가**:

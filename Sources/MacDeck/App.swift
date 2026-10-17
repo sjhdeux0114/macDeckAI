@@ -117,11 +117,11 @@ struct DeckView: View {
             Spacer()
             VStack(alignment: .leading, spacing: 9) {
                 Label("DIRECT3D → METAL", systemImage: "sparkles").font(.system(size: 10, weight: .bold)).foregroundStyle(accent)
-                Text("DXMT · VKD3D / MoltenVK").font(.system(size: 12)).foregroundStyle(.secondary)
-                Text("Direct3D 10 / 11 / 12 게임 지원").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("전역 설정: " + model.graphicsBackend.shortLabel).font(.system(size: 12, weight: .semibold)).foregroundStyle(.primary)
+                Text(model.graphicsBackend == .dxmt ? "DXMT → Metal (DirectX 11)" : "VKD3D · MoltenVK → Metal (DirectX 12)").font(.system(size: 10)).foregroundStyle(.secondary)
             }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
             Button("데이터 폴더 열기", action: model.revealData).buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 12)
-            Text("MacDeck · Preview 0.5.0").font(.system(size: 10)).foregroundStyle(.tertiary).padding(.top, 6)
+            Text("MacDeck · Preview 0.5.1").font(.system(size: 10)).foregroundStyle(.tertiary).padding(.top, 6)
         }.padding(20).background(Color(red: 0.075, green: 0.085, blue: 0.1))
     }
 
@@ -134,10 +134,21 @@ struct DeckView: View {
         }.buttonStyle(.plain)
     }
 
+    var globalModePicker: some View {
+        Picker("그래픽 모드", selection: Binding(get: { model.graphicsBackend }, set: model.setGraphicsBackend)) {
+            ForEach(GraphicsBackend.allCases, id: \.self) { backend in
+                Text(backend.shortLabel).tag(backend)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 210)
+    }
+
     var toolbar: some View {
         HStack(spacing: 16) {
             Text(model.page == "runtime" ? "실행 환경" : model.page == "steam" ? "Steam 연결" : "라이브러리").font(.system(size: 14, weight: .semibold))
             Spacer()
+            globalModePicker
             if model.page == "library" {
                 HStack { Image(systemName: "magnifyingglass"); TextField("게임 검색", text: $model.search).textFieldStyle(.plain).focused($searching) }
                     .font(.system(size: 12)).foregroundStyle(.secondary).padding(9).frame(width: 190).background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
@@ -163,7 +174,7 @@ struct DeckView: View {
                     ForEach(model.filtered) { game in card(game) }
                 }
             }
-            Text("Windows 게임은 DXMT를 통해 Metal로 렌더링합니다. 게임별 호환성은 다를 수 있습니다.")
+            Text("모든 Windows 및 Steam 게임에 전역 그래픽 모드(\(model.graphicsBackend.shortLabel))가 공통 적용됩니다.")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
         }
     }
@@ -173,7 +184,7 @@ struct DeckView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("YOUR GAMES. YOUR MAC.").font(.system(size: 10, weight: .bold)).tracking(2.5).foregroundStyle(accent)
                 Text(model.game?.name ?? "게임을, Mac에서.").font(.system(size: 34, weight: .bold)).lineLimit(2)
-                Text(model.game == nil ? "나만의 게임 라이브러리와 Metal 실행 환경" : model.game?.kind == .windows ? "Windows · Direct3D → DXMT → Metal" : "macOS 네이티브 실행")
+                Text(model.game == nil ? "나만의 게임 라이브러리와 Metal 실행 환경" : model.game?.kind == .windows ? "Windows · 전역 \(model.graphicsBackend.shortLabel) → Metal" : "macOS 네이티브 실행")
                     .font(.system(size: 13)).foregroundStyle(.secondary)
                 HStack(spacing: 12) {
                     Button {
@@ -202,7 +213,7 @@ struct DeckView: View {
                 }.frame(height: 132)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(game.name).font(.system(size: 14, weight: .semibold)).lineLimit(1)
-                    HStack { Text(game.kind.label).font(.system(size: 9, weight: .bold)).tracking(1); Spacer(); Text(game.kind == .windows ? "METAL" : "NATIVE").font(.system(size: 9, weight: .bold)).foregroundStyle(accent) }.foregroundStyle(.secondary)
+                    HStack { Text(game.kind.label).font(.system(size: 9, weight: .bold)).tracking(1); Spacer(); Text(game.kind == .windows ? model.graphicsBackend.shortLabel.uppercased() : "NATIVE").font(.system(size: 9, weight: .bold)).foregroundStyle(accent) }.foregroundStyle(.secondary)
                 }.padding(14)
             }.background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 12)).clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(model.selected == game.id ? accent.opacity(0.8) : .white.opacity(0.06), lineWidth: model.selected == game.id ? 2 : 1))
@@ -222,6 +233,15 @@ struct DeckView: View {
         VStack(alignment: .leading, spacing: 22) {
             Text("Metal로 이어지는 실행 환경").font(.system(size: 29, weight: .bold))
             Text("Direct3D 10 / 11 (DXMT) · Direct3D 12 (VKD3D / MoltenVK) → Apple Metal").foregroundStyle(accent)
+            panel("전역 그래픽 모드 (모든 게임 공통)", icon: "slider.horizontal.3") {
+                Picker("전역 그래픽 모드", selection: Binding(get: { model.graphicsBackend }, set: model.setGraphicsBackend)) {
+                    ForEach(GraphicsBackend.allCases, id: \.self) { backend in
+                        Text(backend.label).tag(backend)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                Text("선택한 모드는 Steam 및 모든 Windows 게임에 전역으로 적용됩니다. 변경 시 런타임의 DXGI 브리지와 오버라이드 설정이 전환되며, 실행 중인 Steam이 있으면 자동으로 재시작해 새 모드를 반영합니다.").font(.callout).foregroundStyle(.secondary)
+            }
             panel("Wine 런타임", icon: "shippingbox") {
                 Text(model.runtime.path ?? "연결된 Wine이 없습니다").font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
                 Text(model.runtime.version).font(.callout).foregroundStyle(.secondary)
@@ -236,9 +256,9 @@ struct DeckView: View {
                 Text("Intel용 Wine을 Apple Silicon에서 실행할 때 사용합니다.").font(.callout).foregroundStyle(.secondary)
                 Link("Apple 설치 안내", destination: URL(string: "https://support.apple.com/102527")!)
             }
-            panel("그래픽 검증", icon: "sparkles") {
-                Text("게임 실행 시 Metal HUD와 DXMT 로그를 켭니다.")
-                Text("Direct3D 10/11 게임은 DXMT를 통해, Direct3D 12 게임은 Wine VKD3D + MoltenVK 브리지를 통해 Metal로 가속합니다. 각 게임의 실행 설정에서 그래픽 백엔드를 자동 감지하거나 직접 지정할 수 있습니다.").font(.callout).foregroundStyle(.secondary)
+            panel("그래픽 검증 및 macOS 게임 모드", icon: "sparkles") {
+                Text("게임 실행 시 Metal HUD, macOS Game Mode(게임 모드), DXMT 로그를 켭니다.")
+                Text("DX11 Mode는 DXMT를 통해 안정적으로 Metal 가속을 수행하며, DX12 Mode는 Wine VKD3D + MoltenVK 브리지를 사용합니다.").font(.callout).foregroundStyle(.secondary)
                 Button("로그 및 데이터 폴더", action: model.revealData)
             }
         }
@@ -310,9 +330,18 @@ struct DeckView: View {
             }.padding(30).frame(maxWidth: .infinity, alignment: .leading)
                 .background(LinearGradient(colors: [Color(red: 0.1, green: 0.2, blue: 0.21), Color(red: 0.08, green: 0.1, blue: 0.14)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 19))
             if !model.steamProgress.isEmpty { Text(model.steamProgress).font(.callout).foregroundStyle(accent) }
-            panel("Steam 전용 환경", icon: "circle.hexagongrid.fill") {
+            panel("Steam 전용 환경 및 전역 그래픽 모드", icon: "circle.hexagongrid.fill") {
                 Label(model.steamInstalled ? "Steam 설치됨" : "첫 실행 준비가 필요합니다", systemImage: model.steamInstalled ? "checkmark.circle.fill" : "arrow.down.circle").foregroundStyle(model.steamInstalled ? accent : .secondary)
-                Text("비밀번호와 Steam Guard 코드는 Steam 창에서 직접 입력하세요. MacDeck은 계정 정보를 읽거나 저장하지 않습니다.").font(.callout).foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    Text("전역 그래픽 모드:").font(.callout.weight(.semibold))
+                    Picker("전역 그래픽 모드", selection: Binding(get: { model.graphicsBackend }, set: model.setGraphicsBackend)) {
+                        ForEach(GraphicsBackend.allCases, id: \.self) { backend in
+                            Text(backend.label).tag(backend)
+                        }
+                    }
+                    .labelsHidden()
+                }
+                Text("선택한 DX11 Mode / DX12 Mode는 모든 게임에 전역으로 적용됩니다. 비밀번호와 Steam Guard 코드는 Steam 창에서 직접 입력하세요.").font(.callout).foregroundStyle(.secondary)
                 Toggle("MacDeck을 열면 Steam Big Picture 자동 시작", isOn: Binding(get: { model.library.startSteamOnLaunch ?? true }, set: model.setSteamAutostart))
             }
             panel("게임 설치 폴더", icon: "externaldrive") {
@@ -333,7 +362,7 @@ struct DeckView: View {
             }
             panel("설치된 Steam 게임", icon: "square.grid.2x2") {
                 Text("MacDeck에 연결된 게임 \(model.steamGameCount)개").font(.headline)
-                Text("Steam에서 게임을 설치하면 자동으로 확인해 라이브러리에 추가합니다. Direct3D 10/11(DXMT)과 Direct3D 12(VKD3D/MoltenVK) 게임 모두 Metal 가속 경로를 사용합니다.").font(.callout).foregroundStyle(.secondary)
+                Text("Steam에서 게임을 설치하면 자동으로 확인해 라이브러리에 추가합니다. 상단 툴바 또는 런타임 설정에서 전역 DX11 Mode / DX12 Mode를 전환할 수 있습니다.").font(.callout).foregroundStyle(.secondary)
                 Button("MacDeck 라이브러리 보기") { model.page = "library" }
                 Text("게임 카드 메뉴에서 실행별 진단 폴더와 ZIP을 열 수 있습니다. Steam 게임의 그래픽 로그는 Steam 항목의 진단 폴더에서도 확인하세요.").font(.caption).foregroundStyle(.secondary)
             }
@@ -369,12 +398,12 @@ struct GameEditor: View {
             Text("실행 인수 · JSON 문자열 배열").font(.caption).foregroundStyle(.secondary)
             TextEditor(text: $arguments).font(.system(size: 12, design: .monospaced)).frame(height: 74).border(.white.opacity(0.1))
             if game.kind == .windows {
-                Picker("그래픽 백엔드", selection: Binding(get: { game.graphicsBackend ?? .auto }, set: { game.graphicsBackend = $0 == .auto ? nil : $0 })) {
+                Picker("전역 그래픽 모드 (모든 게임 공통)", selection: Binding(get: { model.graphicsBackend }, set: model.setGraphicsBackend)) {
                     ForEach(GraphicsBackend.allCases, id: \.self) { backend in
                         Text(backend.label).tag(backend)
                     }
                 }
-                Text("현재 적용 경로: " + DirectX12Support.effectiveBackend(for: game).label).font(.caption).foregroundStyle(accent)
+                Text("현재 전역 그래픽 모드: " + model.graphicsBackend.label).font(.caption).foregroundStyle(accent)
                 TextField("Windows 환경 폴더 · 비워두면 게임별 자동 생성", text: Binding(get: { game.prefix ?? "" }, set: { game.prefix = $0.isEmpty ? nil : $0 }))
             }
             Text("인수 예: [\"-windowed\", \"-width\", \"1280\"]. 쉘 명령은 실행하지 않습니다.").font(.caption).foregroundStyle(.secondary)

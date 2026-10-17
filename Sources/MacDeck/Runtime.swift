@@ -119,6 +119,7 @@ final class DeckModel: ObservableObject {
         }
         selected = library.games.first?.id
         runtime = Runtime.inspect(custom: library.winePath)
+        DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: library.games)
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -134,6 +135,7 @@ final class DeckModel: ObservableObject {
 
     var game: Game? { library.games.first { $0.id == selected } }
     var filtered: [Game] { library.games.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) } }
+    var graphicsBackend: GraphicsBackend { library.graphicsBackend ?? .dxmt }
 
     private func commit(_ changed: LibraryData) throws {
         guard writable else { throw DeckError.message("읽기 오류가 있는 라이브러리는 덮어쓰지 않습니다. 데이터 폴더에서 library.json을 확인해 주세요.") }
@@ -145,7 +147,7 @@ final class DeckModel: ObservableObject {
         do {
             let game = try Game.importing(url)
             if let existing = library.games.first(where: { $0.path == game.path }) { selected = existing.id; page = "library"; return }
-            _ = try? DirectX12Support.prepare(game: game, wine: runtime.path)
+            DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: [game])
             var data = library
             data.games.append(game)
             try commit(data)
@@ -167,7 +169,7 @@ final class DeckModel: ObservableObject {
     func saveGame(_ game: Game) {
         do {
             guard let index = library.games.firstIndex(where: { $0.id == game.id }) else { return }
-            _ = try? DirectX12Support.prepare(game: game, wine: runtime.path)
+            DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: [game])
             var data = library
             data.games[index] = game
             try commit(data)
@@ -495,6 +497,8 @@ final class DeckModel: ObservableObject {
     func start() {
         guard !didStart else { return }
         didStart = true
+        let winePath = runtime.path ?? Runtime.inspect(custom: library.winePath).path
+        DirectX12Support.applyGlobal(mode: graphicsBackend, wine: winePath, games: library.games)
         reconnectExternalLibraries(steamRunning: false)
         refreshSteamGames(silent: true)
         if CommandLine.arguments.contains("--setup-steam") { installSteam() }
@@ -504,6 +508,29 @@ final class DeckModel: ObservableObject {
     func setSteamAutostart(_ enabled: Bool) {
         do { var data = library; data.startSteamOnLaunch = enabled; try commit(data) }
         catch { message = error.localizedDescription }
+    }
+
+    func setGraphicsBackend(_ mode: GraphicsBackend) {
+        guard graphicsBackend != mode else { return }
+        do {
+            var data = library
+            data.graphicsBackend = mode
+            for index in data.games.indices { data.games[index].graphicsBackend = nil }
+            try commit(data)
+            let winePath = runtime.path ?? Runtime.inspect(custom: library.winePath).path
+            DirectX12Support.applyGlobal(mode: mode, wine: winePath, games: data.games)
+            steamProgress = "전역 그래픽 모드를 \(mode.shortLabel)로 전환했습니다."
+            guard steamInstalled, let winePath else { return }
+            Task {
+                let service = SteamStorage(client: SteamClient(disk: disk))
+                if (try? await service.isRunning(wine: winePath)) == true {
+                    steamProgress = "\(mode.shortLabel) 적용을 위해 Steam을 재시작하고 있습니다…"
+                    try? await service.stopAndWait(wine: winePath)
+                    steamProgress = "전역 그래픽 모드(\(mode.shortLabel))가 모든 게임과 Steam에 적용되었습니다."
+                    launchSteam()
+                }
+            }
+        } catch { message = error.localizedDescription }
     }
 
     func launchSteam() {
@@ -540,8 +567,8 @@ final class DeckModel: ObservableObject {
                     game.graphicsBackend = data.games[index].graphicsBackend
                     data.games[index] = game
                 } else { data.games.append(game) }
-                _ = try? DirectX12Support.prepare(game: game, wine: winePath)
             }
+            DirectX12Support.applyGlobal(mode: graphicsBackend, wine: winePath, games: data.games)
             if data.games != library.games { try commit(data) }
             if !silent { steamProgress = "설치된 Steam 게임 \(found.count)개를 확인했습니다. 전체 보유 라이브러리는 Steam에서 볼 수 있습니다." }
         } catch { if !silent { message = error.localizedDescription } }

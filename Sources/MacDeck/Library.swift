@@ -8,13 +8,34 @@ enum GameKind: String, Codable {
 }
 
 enum GraphicsBackend: String, Codable, CaseIterable {
-    case auto, dxmt, d3d12
+    case dxmt, d3d12
+
+    var shortLabel: String {
+        switch self {
+        case .dxmt: return "DX11 Mode"
+        case .d3d12: return "DX12 Mode"
+        }
+    }
+
     var label: String {
         switch self {
-        case .auto: return "자동 감지 (DX11/DX12)"
-        case .dxmt: return "DirectX 10/11 (DXMT → Metal)"
-        case .d3d12: return "DirectX 12 (VKD3D · MoltenVK → Metal)"
+        case .dxmt: return "DX11 Mode (DXMT → Metal · 기본 권장)"
+        case .d3d12: return "DX12 Mode (VKD3D · MoltenVK → Metal · 실험적)"
         }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = (try? container.decode(String.self)) ?? "dxmt"
+        switch raw {
+        case "d3d12", "dx12": self = .d3d12
+        default: self = .dxmt
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 
@@ -53,19 +74,24 @@ struct Game: Codable, Identifiable, Equatable {
 
 enum DirectX12Support {
     static let wineNativeMarker = Data("Wine native  DLL".utf8)
+    static let wineBuiltinMarker = Data("Wine builtin DLL".utf8)
     private static let excludedFolders: Set<String> = ["_commonredist", "redist", "directx", "installers", "vc", "vcredist", "support", "crashreporter"]
 
-    static func d3d12DXGI(forWine winePath: String?) -> URL? {
-        var candidates: [URL] = []
+    static func runtimeRoot(forWine winePath: String?) -> URL? {
         if let winePath, !winePath.isEmpty {
-            let runtimeRoot = URL(fileURLWithPath: winePath).resolvingSymlinksInPath()
+            let root = URL(fileURLWithPath: winePath).resolvingSymlinksInPath()
                 .deletingLastPathComponent().deletingLastPathComponent()
-            candidates.append(runtimeRoot.appendingPathComponent("lib/wine/dxgi-d3d12/x86_64-windows/dxgi.dll"))
+            if FileManager.default.fileExists(atPath: root.appendingPathComponent("lib/wine").path) {
+                return root
+            }
         }
         if let resources = Bundle.main.resourceURL {
-            candidates.append(resources.appendingPathComponent("Runtime/lib/wine/dxgi-d3d12/x86_64-windows/dxgi.dll"))
+            let bundled = resources.appendingPathComponent("Runtime")
+            if FileManager.default.fileExists(atPath: bundled.appendingPathComponent("lib/wine").path) {
+                return bundled
+            }
         }
-        return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+        return nil
     }
 
     static func targetDirectory(for game: Game) -> URL? {
@@ -100,80 +126,72 @@ enum DirectX12Support {
         return result
     }
 
-    static func detectsD3D12(in directory: URL) -> Bool {
-        guard FileManager.default.fileExists(atPath: directory.path) else { return false }
-        let d3d12Markers = [
-            directory.appendingPathComponent("D3D12/D3D12Core.dll"),
-            directory.appendingPathComponent("d3d12/d3d12core.dll"),
-            directory.appendingPathComponent("D3D12Core.dll"),
-            directory.appendingPathComponent("d3d12.dll")
-        ]
-        if d3d12Markers.contains(where: { FileManager.default.fileExists(atPath: $0.path) }) { return true }
-        let dirs = executableDirectories(in: directory)
-        let binaryTokens = [Data("D3D12CreateDevice".utf8), Data("d3d12.dll".utf8), Data("D3D12.dll".utf8), Data("D3D12.DLL".utf8)]
-        for dir in dirs {
-            if FileManager.default.fileExists(atPath: dir.appendingPathComponent("D3D12/D3D12Core.dll").path) ||
-               FileManager.default.fileExists(atPath: dir.appendingPathComponent("D3D12Core.dll").path) {
-                return true
-            }
-            guard let items = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles]) else { continue }
-            for item in items {
-                let ext = item.pathExtension.lowercased()
-                if ext == "ini" || ext == "cfg" {
-                    if let text = try? String(contentsOf: item, encoding: .utf8).lowercased(),
-                       text.contains("capability=directx12") || text.contains("targetplatform=directx12") || text.contains("dx12=1") || text.contains("directx12=true") {
-                        return true
-                    }
-                } else if ext == "exe" {
-                    if let data = try? Data(contentsOf: item, options: .mappedIfSafe),
-                       binaryTokens.contains(where: { data.range(of: $0) != nil }) {
-                        return true
-                    }
-                }
-            }
-        }
-        return false
-    }
-
-    static func effectiveBackend(for game: Game) -> GraphicsBackend {
-        if let explicit = game.graphicsBackend, explicit != .auto { return explicit }
-        guard let dir = targetDirectory(for: game) else { return .dxmt }
-        return detectsD3D12(in: dir) ? .d3d12 : .dxmt
-    }
-
     static func isManagedDXGI(_ url: URL) -> Bool {
         guard FileManager.default.fileExists(atPath: url.path),
               let handle = try? FileHandle(forReadingFrom: url) else { return false }
         defer { try? handle.close() }
         guard let header = try? handle.read(upToCount: 512) else { return false }
-        return header.range(of: wineNativeMarker) != nil
+        return header.range(of: wineNativeMarker) != nil || header.range(of: wineBuiltinMarker) != nil
     }
 
-    @discardableResult
-    static func prepare(game: Game, wine: String?) throws -> GraphicsBackend {
-        let backend = effectiveBackend(for: game)
-        guard let root = targetDirectory(for: game), FileManager.default.fileExists(atPath: root.path) else { return backend }
+    static func syncGameDirectory(_ root: URL, mode: GraphicsBackend) {
+        guard FileManager.default.fileExists(atPath: root.path) else { return }
         let dirs = executableDirectories(in: root)
-        if backend == .d3d12 {
-            guard let source = d3d12DXGI(forWine: wine) else { return backend }
-            let bytes = try Data(contentsOf: source)
-            for dir in dirs {
-                let target = dir.appendingPathComponent("dxgi.dll")
-                if !FileManager.default.fileExists(atPath: target.path) || isManagedDXGI(target) {
-                    if (try? Data(contentsOf: target)) != bytes {
-                        try bytes.write(to: target, options: .atomic)
-                    }
-                }
+        for dir in dirs {
+            let deployedDXGI = dir.appendingPathComponent("dxgi.dll")
+            if isManagedDXGI(deployedDXGI) {
+                try? FileManager.default.removeItem(at: deployedDXGI)
             }
-        } else {
-            for dir in dirs {
-                let target = dir.appendingPathComponent("dxgi.dll")
-                if isManagedDXGI(target) {
-                    try? FileManager.default.removeItem(at: target)
+            guard let items = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else { continue }
+            for item in items where item.pathExtension.lowercased() == "ini" {
+                guard let content = try? String(contentsOf: item, encoding: .utf8) else { continue }
+                var updated = content
+                if mode == .dxmt {
+                    updated = updated
+                        .replacingOccurrences(of: "Capability=DirectX12", with: "Capability=DirectX11")
+                        .replacingOccurrences(of: "TargetPlatform=DirectX12", with: "TargetPlatform=DirectX11")
+                } else {
+                    updated = updated
+                        .replacingOccurrences(of: "Capability=DirectX11", with: "Capability=DirectX12")
+                        .replacingOccurrences(of: "TargetPlatform=DirectX11", with: "TargetPlatform=DirectX12")
+                }
+                if updated != content {
+                    try? updated.write(to: item, atomically: true, encoding: .utf8)
                 }
             }
         }
-        return backend
+    }
+
+    @discardableResult
+    static func applyGlobal(mode: GraphicsBackend, wine: String?, games: [Game] = []) -> GraphicsBackend {
+        if let root = runtimeRoot(forWine: wine) {
+            let sourceFolder = mode == .d3d12 ? "dxgi-d3d12" : "dxgi-dxmt"
+            for arch in ["x86_64-windows", "i386-windows"] {
+                let source = root.appendingPathComponent("lib/wine/\(sourceFolder)/\(arch)/dxgi.dll")
+                let target = root.appendingPathComponent("lib/wine/\(arch)/dxgi.dll")
+                if FileManager.default.fileExists(atPath: source.path),
+                   let bytes = try? Data(contentsOf: source),
+                   (try? Data(contentsOf: target)) != bytes {
+                    try? FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try? bytes.write(to: target, options: .atomic)
+                }
+            }
+        }
+        for game in games {
+            if let dir = targetDirectory(for: game) {
+                syncGameDirectory(dir, mode: mode)
+            }
+        }
+        return mode
+    }
+
+    static func dllOverrides(for mode: GraphicsBackend) -> String {
+        switch mode {
+        case .dxmt:
+            return "winemenubuilder.exe=d;mscoree,mshtml=;d3d11,dxgi,d3d10core,winemetal=b;d3d12,d3d12core=;xinput1_1,xinput1_2,xinput1_3,xinput1_4,xinput9_1_0=b"
+        case .d3d12:
+            return "winemenubuilder.exe=d;mscoree,mshtml=;dxgi,d3d12,d3d12core,vulkan-1,winevulkan,d3d11,d3d10core,winemetal=b;xinput1_1,xinput1_2,xinput1_3,xinput1_4,xinput9_1_0=b"
+        }
     }
 }
 
@@ -183,6 +201,7 @@ struct LibraryData: Codable {
     var winePath = ""
     var startSteamOnLaunch: Bool? = nil
     var externalLibraries: [ExternalLibrary]? = nil
+    var graphicsBackend: GraphicsBackend? = nil
 }
 
 enum DeckError: LocalizedError {
@@ -252,18 +271,23 @@ struct LaunchPlan {
         var arguments = game.arguments
         if game.kind == .windows {
             guard let wine, FileManager.default.isExecutableFile(atPath: wine) else { throw DeckError.message("런타임 탭에서 macOS용 Wine 실행 파일을 선택해 주세요.") }
-            _ = try? DirectX12Support.prepare(game: game, wine: wine)
+            let loaded = try? disk.load()
+            let mode = loaded?.graphicsBackend ?? game.graphicsBackend ?? .dxmt
+            DirectX12Support.applyGlobal(mode: mode, wine: wine, games: (loaded?.games ?? []) + [game])
             executable = URL(fileURLWithPath: wine)
             arguments.insert(game.path, at: 0)
             environment["WINEPREFIX"] = disk.prefix(for: game).path
             environment["WINEDEBUG"] = "-all"
-            environment["WINEDLLOVERRIDES"] = "winemenubuilder.exe=d;mscoree,mshtml=;dxgi=n,b;d3d11,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b;xinput1_1,xinput1_2,xinput1_3,xinput1_4,xinput9_1_0=b"
+            environment["WINEDLLOVERRIDES"] = DirectX12Support.dllOverrides(for: mode)
             environment["DYLD_FALLBACK_LIBRARY_PATH"] = URL(fileURLWithPath: wine).resolvingSymlinksInPath()
                 .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib").path
             environment["DXMT_LOG_LEVEL"] = "info"
             environment["DXMT_LOG_PATH"] = disk.logs.path
             environment["MTL_HUD_ENABLED"] = "1"
             environment["SDL_RENDER_DRIVER"] = "direct3d11"
+            if mode == .d3d12 {
+                environment["MVK_CONFIG_RESUME_LOST_DEVICE"] = "1"
+            }
         } else if game.kind == .executable {
             executable = URL(fileURLWithPath: game.path)
         } else {

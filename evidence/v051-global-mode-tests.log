@@ -1,0 +1,70 @@
+PASS: new library starts empty
+PASS: library preserves identities, paths and literal arguments
+PASS: Windows arguments are passed directly without a shell
+PASS: each game receives its own Wine prefix
+PASS: default global DX11 Mode enables DXMT and disables D3D12 overrides
+PASS: SDL games use the Direct3D 11 path
+PASS: launch plan executes without evaluating injected shell syntax
+PASS: invalid Windows executable is rejected
+PASS: corrupt library is rejected without overwriting it
+PASS: corrupt library remains intact
+PASS: Steam install is detected in the dedicated prefix
+PASS: Steam launches Big Picture in its persistent prefix
+PASS: only fully installed Steam games are imported
+PASS: Steam games route through the client and share its prefix
+PASS: Steam library Windows paths map into the correct prefix
+PASS: Steam library paths cannot traverse outside their drive mapping
+PASS: VDF preserves escaped Windows paths
+PASS: VDF handles quotes and comments
+PASS: malformed VDF is rejected
+PASS: external folder receives an available persistent drive and identity marker
+PASS: external Windows drive resolves to selected folder with Unicode and spaces
+PASS: Steam manifests on external drives import with actual install location
+PASS: disconnected storage is detected without recreating its mount folder
+PASS: different disk at the same mount path is not accepted as connected
+PASS: reconnected storage keeps its original drive mapping
+PASS: external mappings persist across app launches
+PASS: libraries from previous releases remain readable
+PASS: Steam settings are unchanged while client is running
+PASS: external library is registered in Steam
+PASS: Steam mirror receives the same external library
+PASS: existing Steam metadata and installed apps are preserved
+PASS: repeated registration does not duplicate libraries
+PASS: same physical Steam library cannot receive a duplicate drive mapping
+PASS: unregister removes Steam connection and retains game files
+PASS: disconnect removes drive mapping without deleting games
+PASS: a disconnected folder can be linked again
+PASS: malformed mirror prevents partial library updates
+PASS: Apple gamepad profile reads face buttons sticks and triggers
+PASS: gamepad dead zone ignores stick drift
+PASS: stick movement selects the next game
+PASS: held direction repeats only after its delay
+PASS: holding confirm cannot repeatedly launch games
+PASS: background input does not trigger a launch on returning to MacDeck
+PASS: shoulder buttons navigate launcher pages
+PASS: Windows games use Wine builtin XInput
+PASS: each launch has isolated process and renderer logs
+PASS: diagnostics include only an allowlist of environment variables
+PASS: diagnostics persist crash signal process ID and end time
+PASS: Steam authentication output and arguments are excluded
+PASS: Steam request exit is not recorded as game completion
+PASS: diagnostic arguments redact password and token values
+PASS: latest game diagnostics can be located after app restart
+PASS: diagnostics summarize GPU error clues without claiming a confirmed cause
+PASS: Steam game diagnostics correlate with the client graphics log session
+PASS: legacy drive-root libraries migrate to an absolute non-root Steam path
+PASS: drive mapping repair preserves actual game folder and identity marker
+PASS: repair replaces stale drive-only paths without duplicating libraries or losing IDs
+PASS: Steam normalized drive-only paths map to the drive root
+PASS: Steam mount failure is shown even when the configuration entry exists
+PASS: Steam recognition requires a successful library scan log
+PASS: configured external libraries automatically reconnect and migrate on app startup
+PASS: Global DX11 Mode switches runtime dxgi.dll to DXMT
+PASS: Global mode cleans up managed Wine dxgi.dll from game directory
+PASS: Global DX11 Mode updates game config INI to DirectX11
+PASS: Global DX12 Mode switches runtime dxgi.dll to Wine D3D12 bridge
+PASS: Global DX12 Mode updates game config INI to DirectX12
+PASS: Global DX12 Mode enables D3D12 and Vulkan overrides in LaunchPlan
+PASS: third-party dxgi.dll is never deleted when switching global modes
+PASS: diagnostics identify D3D12 adapter and device creation clues
+69 checks passed

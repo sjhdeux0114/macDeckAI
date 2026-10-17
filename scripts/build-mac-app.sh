@@ -14,9 +14,12 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>dev.macdeck.app</string>
 <key>CFBundleExecutable</key><string>MacDeck</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.5.0</string>
-<key>CFBundleVersion</key><string>6</string>
+<key>CFBundleShortVersionString</key><string>0.5.1</string>
+<key>CFBundleVersion</key><string>7</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
+<key>LSApplicationCategoryType</key><string>public.app-category.games</string>
+<key>LSSupportsGameMode</key><true/>
+<key>GCSupportsGameMode</key><true/>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
