@@ -287,3 +287,10 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
   - `re3.exe`(Resident Evil 3, DirectX 12) 실제 실행 검증: `vkd3d 1.14` → `winevulkan` → `MoltenVK 1.4.1` → `Apple M5 (Metal 3)` 장치 생성, `RESIDENT EVIL 3` 창(`1518x994`) 및 `d3d12_swapchain_Present` 정상 동작 확인 (`evidence/re3-d3d12-moltenvk.log`).
   - `/Users/sjhdeux/Applications/MacDeck.app` 설치본 교체 및 재시작 후 `library.json`에 `driveFolder: "/Volumes/NVME_1T"` 자동 반영, `RE3/dxgi.dll`(237,568 bytes) 배포, 새 Steam 세션(v0.5.0) 시작 확인.
 
+### 2026-10-18 — `work.md` 및 `README.md` 누적 변경 내역 동기화 규칙 강화
+
+- 사용자 요청: "수정할때마다 work.md파일에 수정내역 누적으로 추가하고 readme.md파일에도 변경내역등을 추가해줘"
+- 변경 파일 및 내용:
+  - `AGENTS.md`: 코드나 설정을 수정할 때마다 `work.md`에 누적 수정내역을 추가하고, `README.md`에도 변경내역(Changelog 및 기능/검증 현황)을 함께 누적 갱신하도록 작업 지침 명문화.
+  - `README.md`: 하단에 `📋 변경 내역 (Changelog)` 섹션을 신설하여 `v0.1.0` ~ `v0.5.0`까지의 버전별 주요 변경·개선·검증 내역을 정리하고 이후 수정 시 계속 누적되도록 구성.
+  - `work.md`: 본 작업 이력 누적 추가.

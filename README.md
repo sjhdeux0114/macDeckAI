@@ -170,7 +170,45 @@ macDeckAI/
 
 ---
 
+## 📋 변경 내역 (Changelog)
+
+> 세부적인 작업·검증·디버깅 누적 기록은 [`work.md`](work.md)에서 확인할 수 있습니다.
+
+### v0.5.0 (2026-10-18)
+- **DirectX 12 (`VKD3D 1.14 + MoltenVK 1.4.1 → Apple Metal 3`) 지원 추가**:
+  - `Runtime/lib/libvulkan.1.dylib` 및 `libvulkan.dylib` → `libMoltenVK.dylib` 심볼릭 링크 구성.
+  - DXMT `dxgi.dll`(D3D10/11 전용)과 Wine `d3d12.dll`(`IID_IWineDXGIAdapter` / `ID3D12CommandQueue` 요구) 간의 인터페이스 충돌을 해결하기 위해 Wine 원본 D3D12 호환 `dxgi.dll`(237KB, `Wine native  DLL` 브리지)을 `Runtime/lib/wine/dxgi-d3d12/`에 별도 보존.
+  - `DirectX12Support` 자동 감지(`D3D12Core.dll`, `d3d12.dll`, `.ini` `Capability=DirectX12`, 실행 파일 `D3D12CreateDevice` 임포트 검사) 및 게임별 그래픽 백엔드(`자동 감지` / `DXMT` / `D3D12`) 선택 UI 추가.
+  - 외장 NVMe 드라이브에 설치된 3D Steam 게임 **Resident Evil 3 (`re3.exe`, DirectX 12)** 실행 및 Apple M5 Metal 3 스왑체인 렌더링 검증.
+- **앱 시작 시 외장 게임 설치 폴더 자동 연결 (`autoConnectAll`)**:
+  - `library.json`에 설정된 외장 게임 설치 폴더(`externalLibraries`)가 있으면 앱 실행 시 자동으로 Wine `dosdevices/<drive>:` 심볼릭 링크를 생성·복구하고 비루트 경로(`E:\SteamLibrary`) 마이그레이션 및 Steam `libraryfolders.vdf` 등록을 수행.
+- **진단 및 테스트 강화**:
+  - `SessionDiagnostics`에 D3D12 어댑터/장치 생성 실패(`17399d75-964e-4c03-99f8-9d4fd196dd62`, `D3D12CreateDeviceFailed`) 단서 요약 추가.
+  - 자체 검증 테스트(`--self-test`) **54개 → 68개**로 확대 및 전수 통과.
+
+### v0.4.0 – v0.4.1 (2026-10-17)
+- **외장 스토리지 Steam 자동 등록 및 비루트 경로(`E:\SteamLibrary`) 정규화**:
+  - Steam 실행 여부를 `tasklist.exe`로 확인 후 안전하게 종료하고 `steamapps/libraryfolders.vdf` 및 `config/libraryfolders.vdf` 양쪽에 백업 후 반영.
+  - 연결 해제 시 실제 게임 파일은 삭제하지 않고 보존하는 안전 해제 구현.
+- **게임패드(DualShock 4 등) 지원 및 런처 콘솔 내비게이션**:
+  - Apple `GameController` 및 SDL2 기반 실시간 버튼·스틱·트리거 입력 모니터링, 전경 런처 패드 조작, Windows builtin XInput 오버라이드 적용.
+- **실행별 정밀 진단 시스템 (`Diagnostics.swift`)**:
+  - 실행별 독립 세션 폴더, `diagnostics.json`, 렌더러 로그 분리(`Renderer/`), 오류 단서 요약(`summary.txt`), 원클릭 진단 ZIP 내보내기 구현.
+
+### v0.2.0 – v0.3.0 (2026-10-17)
+- **Windows Steam Big Picture 통합 (`WineSikarugir 10.0_8`)**:
+  - Valve 공식 `SteamSetup.exe` 무인 설치, 전용 영속 prefix(`Bottles/Steam`), Big Picture 자동 시작, 설치된 Steam 게임 자동 동기화.
+- **외장 드라이브 연결 기반 마련 (`ExternalLibrary.swift`)**:
+  - 외장 볼륨 UUID 마커 파일 기반 연결 상태 확인 및 Wine 드라이브 문자 할당.
+
+### v0.1.0 (2026-10-17)
+- **macOS 네이티브 런처 및 Direct3D 11 → DXMT 0.80 → Apple Metal 가속**:
+  - `SetRotation(IDENTITY)` 호환 패치를 통해 SDL2/D3D11 게임의 OpenGL 폴백을 방지하고 Apple M5 Metal HUD 및 **Brogue CE (Windows x86_64)** 하드웨어 가속 검증 완료.
+
+---
+
 ## 📄 라이선스
 
 본 프로젝트의 자체 소스 코드는 **GPL-3.0** 라이선스로 배포됩니다.
-포함되거나 연계되는 외부 런타임(Wine, DXMT, SDL2 등)은 각 프로젝트의 원본 라이선스를 준수합니다. 자세한 내용은 [`LICENSE`](LICENSE) 및 [`licenses/`](licenses/) 디렉터리를 참고하십시오.
+포함되거나 연계되는 외부 런타임(Wine, DXMT, VKD3D, MoltenVK, SDL2 등)은 각 프로젝트의 원본 라이선스를 준수합니다. 자세한 내용은 [`LICENSE`](LICENSE) 및 [`licenses/`](licenses/) 디렉터리를 참고하십시오.
+
