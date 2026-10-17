@@ -6,10 +6,10 @@ struct ExternalLibrary: Codable, Identifiable, Equatable {
     var drive: String
     var libraryFolder: String? = nil
     var driveFolder: String? = nil
-    var mappingRoot: URL { URL(fileURLWithPath: driveFolder ?? path).standardizedFileURL }
+    var mappingRoot: URL { URL(fileURLWithPath: driveFolder ?? path, isDirectory: false).standardizedFileURL }
     var windowsPath: String { drive.uppercased() + ":\\" }
     var librarySubdirectory: String { libraryFolder ?? (FileManager.default.fileExists(atPath: URL(fileURLWithPath: path).appendingPathComponent("steamapps").path) ? "" : "SteamLibrary") }
-    var installRoot: URL { librarySubdirectory.isEmpty ? URL(fileURLWithPath: path) : URL(fileURLWithPath: path).appendingPathComponent(librarySubdirectory) }
+    var installRoot: URL { librarySubdirectory.isEmpty ? URL(fileURLWithPath: path, isDirectory: false) : URL(fileURLWithPath: path, isDirectory: true).appendingPathComponent(librarySubdirectory, isDirectory: false) }
     var windowsLibraryPath: String {
         let base = mappingRoot.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let actual = installRoot.standardizedFileURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))

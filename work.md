@@ -2,21 +2,21 @@
 
 이 문서는 사용자의 요청에 따라 유지하는 작업·검증·인계 기록이다. 이후 작업도 날짜별로 뒤에 추가한다. 인증 정보는 기록하지 않는다.
 
-## 현재 상태 — 2026-10-17
+## 현재 상태 — 2026-10-18
 
 - 프로젝트: `/Users/sjhdeux/Documents/macdeck`
-- 현재 앱: **MacDeck 0.4.0**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
+- 현재 앱: **MacDeck 0.5.0**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
 - 빌드 결과: `dist/MacDeck.app`
 - 설치된 앱: `/Users/sjhdeux/Applications/MacDeck.app`
 - 실제 호스트: Apple M5, 메모리 24 GiB, macOS 27.0.1. 최소 배포 대상 macOS 13은 빌드 설정이며 다른 기기에서 검증한 것은 아니다.
-- 구현: 네이티브 라이브러리, Windows 게임 실행, DXMT/Metal, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑.
-- 최종 자체 검사 **54개 통과**, 앱 빌드·서명 확인 성공.
-- 실제 Windows Brogue CE 던전 렌더링 및 **M5 Metal HUD 확인 성공**. Steam용 Wine 10을 포함한 v0.2 앱에서도 재검증했다.
-- 실제 Windows Steam 설치·업데이트·Big Picture의 QR/계정 로그인 UI 및 설치된 앱을 통한 재시작 확인 성공.
+- 구현: 네이티브 라이브러리, Windows 게임 실행, **Direct3D 10/11(DXMT) 및 Direct3D 12(VKD3D + MoltenVK) → Apple Metal 가속**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
+- 최종 자체 검사 **68개 통과**, 앱 빌드·서명 확인 성공.
+- 실제 Windows Brogue CE 던전 렌더링 및 **M5 Metal HUD 확인 성공**.
+- 실제 Windows Steam 로그인 완료 및 외장 NVMe 드라이브(`E:\SteamLibrary`)에 Steam 게임 4종(Resident Evil 3, Balatro, Halls of Torment, No Results Found) 다운로드·설치 확인 성공.
+- **Direct3D 12 3D 게임(Resident Evil 3, `re3.exe`) 실행 및 Apple M5 Metal 3(VKD3D 1.14 → winevulkan → MoltenVK 1.4.1) 창 생성·스왑체인 Present 확인 성공**.
 - Bluetooth DualShock 4를 Apple GameController 및 Wine과 같은 SDL2에서 인식하고 실제 버튼/축 변화 확인. Windows/Steam/게임 내부 조작은 아직 별도 검증 필요.
-- v0.4: 외장 폴더의 실제 Steam 등록·연결 해제(파일 유지), 중복 설치 폴더 방지, 실행별 구조화된 진단·GPU 단서 요약·ZIP 내보내기 제공.
-- **Steam 계정 인증, Steam 게임 다운로드·실행, Steam 게임의 Metal 가속은 아직 미검증**이다. 사용자의 로그인 완료 응답은 아직 받지 않았다.
-- 작업 폴더를 Git 저장소로 초기화하고 원격 저장소(`https://github.com/sjhdeux0114/macDeckAI.git`, branch `main`)로 초기 커밋 및 푸시 완료.
+- v0.5: Direct3D 12(VKD3D/MoltenVK) + Direct3D 10/11(DXMT) 공존 브리지, 게임별 그래픽 백엔드 자동 감지/선택, 앱 실행 시 설정된 외장 게임 설치 폴더 자동 연결·인식 복구 제공.
+- 작업 폴더를 Git 저장소로 초기화하고 원격 저장소(`https://github.com/sjhdeux0114/macDeckAI.git`, branch `main`)로 커밋 및 푸시 완료.
 
 ## 사용자 목표 및 이미 받은 승인
 
@@ -38,19 +38,20 @@
 MacDeck.app — SwiftUI/AppKit arm64 UI
   → WineSikarugir 10.0 revision 8 — x86_64, Rosetta
   → Windows Steam / Windows 게임
-  → Direct3D 10/11 → DXMT 0.80 + IDENTITY rotation 수정
-  → Apple Metal
+  ├─ Direct3D 10/11 → DXMT 0.80 + IDENTITY rotation 수정 → Apple Metal
+  └─ Direct3D 12    → Wine VKD3D 1.14 + Wine DXGI Bridge + MoltenVK 1.4.1 → Apple Metal
 ```
 
-- `Sources/MacDeck/App.swift`: 네이티브 UI, Steam 중심 시작 화면, 라이브러리, 실행 환경, 외장 설치 폴더 패널.
-- `Sources/MacDeck/Library.swift`: Codable 데이터, 게임 가져오기, prefix 준비, 셸을 거치지 않는 실행 계획과 환경.
-- `Sources/MacDeck/Runtime.swift`: 프로세스·로그·라이브러리 관리, Steam 설치/실행/자동 시작/게임 동기화, 외장 폴더 선택과 실행 전 연결 확인.
+- `Sources/MacDeck/App.swift`: 네이티브 UI, Steam 중심 시작 화면, 라이브러리, 실행 환경, 그래픽 백엔드 선택기, 외장 설치 폴더 패널.
+- `Sources/MacDeck/Library.swift`: Codable 데이터, 게임 가져오기, prefix 준비, D3D12 자동 감지 및 `dxgi.dll` 브리지 배포(`DirectX12Support`), 셸을 거치지 않는 실행 계획과 환경.
+- `Sources/MacDeck/Runtime.swift`: 프로세스·로그·라이브러리 관리, Steam 설치/실행/자동 시작/게임 동기화, 앱 시작 시 외장 폴더 자동 연결(`reconnectExternalLibraries`).
 - `Sources/MacDeck/SteamClient.swift`: VDF 파서, Steam 전용 prefix, Big Picture 인수, 설치 게임 탐색, Windows 경로 변환, 설치 프로세스 대기.
-- `Sources/MacDeck/ExternalLibrary.swift`: 선택 폴더 식별 파일, 고정 드라이브 문자, 연결 여부와 남은 용량.
-- `Sources/MacDeck/SelfTests.swift`: 격리된 임시 폴더 기반 자체 검사 27개.
+- `Sources/MacDeck/ExternalLibrary.swift`: 선택 폴더 식별 파일, 고정 드라이브 문자, 비루트(`E:\SteamLibrary`) 매핑 정규화, 연결 여부와 남은 용량.
+- `Sources/MacDeck/SteamStorage.swift`: Steam `libraryfolders.vdf` 등록/해제, 드라이브 심볼릭 링크 자동 복구(`autoConnectAll`), 인식 상태 확인.
+- `Sources/MacDeck/SelfTests.swift`: 격리된 임시 폴더 기반 자체 검사 68개.
 - `Sources/MacDeckProbe/main.swift`: 초기 Metal 계산·Linux VM 진단 도구.
-- `scripts/prepare-metal-runtime.py`: 고정 SHA-256 배포물로 앱 런타임과 게임 구성.
-- `scripts/build-mac-app.sh`: Swift CLI 컴파일, Info.plist v0.3.0 생성, ad-hoc 서명.
+- `scripts/prepare-metal-runtime.py`: 고정 SHA-256 배포물로 앱 런타임(DXMT + VKD3D/MoltenVK `libvulkan.1.dylib` + D3D12용 Wine `dxgi.dll`)과 게임 구성.
+- `scripts/build-mac-app.sh`: Swift CLI 컴파일, Info.plist v0.5.0 생성, ad-hoc 서명.
 - `scripts/package-mac-app.sh`: 런타임 준비 → 앱 빌드 → 자체 검사 → 서명 검증.
 - `scripts/patch-dxmt-identity.py`, `patches/dxmt-0.80-identity-rotation.patch`: DXMT 배포 DLL 수정과 대응 소스 변경.
 - `scripts/test-dxmt-patch.py`, `scripts/test-rotation.c`: 변경 바이트 범위·입력 거부·실제 x64 ABI 검사.
@@ -253,4 +254,36 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
   - RE3는 Capcom 차세대 패치(Next-Gen Update)로 인해 기본 렌더러가 DirectX 12(Agility SDK)로 강제 설정됨.
   - 현재 MacDeck의 그래픽 가속 레이어는 **DXMT 0.80 (Direct3D 10/11 -> Apple Metal)** 기반으로, D3D12를 Metal로 변환하는 레이어가 없어 `D3D12CreateDevice` 실패 발생.
 - 해결 방안:
-  - Steam 속성 → 베타(Betas) 탭에서 Capcom이 공식 제공하는 **`dx11_non-rt`** 브랜치로 전환하여 Direct3D 11 모드로 구동 (DXMT Metal 가속 경로 활성화).
+  - Steam 속성 → 베타(Betas) 탭에서 Capcom이 공식 제공하는 **`dx11_non-rt`** 브랜치로 전환하여 Direct3D 11 모드로 구동하거나, MacDeck 자체에 DirectX 12 가속 파이프라인(VKD3D + MoltenVK)을 통합.
+
+### 2026-10-18 — DirectX 12(VKD3D + MoltenVK → Metal) 통합 및 외장 폴더 시작 시 자동 연결 (v0.5.0)
+
+- 사용자 요청:
+  1. "dx12도 가능하도록 작업해줘" / "여전히 오류"
+  2. "게임 설치 폴더 설정된 내역이 있으면 앱 실행할때 자동으로 연결하도록 해"
+- DirectX 12(`D3D12CreateDeviceFailed`) 근본 원인 규명:
+  1. **Vulkan 로더 심볼릭 링크 누락**: Wine의 `win32u.so`(`vulkan_init_once`)는 `dlopen("libvulkan.1.dylib")`를 호출하나, `Runtime/lib/`에는 `libMoltenVK.dylib`만 존재하고 `libvulkan.1.dylib` / `libvulkan.dylib` 심볼릭 링크가 없었음.
+  2. **DXMT `dxgi.dll`과 Wine `d3d12.dll` 간 어댑터/스왑체인 인터페이스 충돌**:
+     - `prepare-metal-runtime.py`가 Wine 내장 `dxgi.dll`(237,568 bytes)을 DXMT `dxgi.dll`(1,890,058 bytes)로 덮어썼음.
+     - DXMT는 D3D10/11 전용이므로 `DXGIAdapter`가 Wine D3D12의 내부 인터페이스 `IID_IWineDXGIAdapter`(`17399d75-964e-4c03-99f8-9d4fd196dd62`)와 `ID3D12CommandQueue` 스왑체인을 구현하지 않아 `E_NOINTERFACE` 반환 및 `D3D12CreateDeviceFailed` 발생.
+  3. **중간 재시도 시 오류 원인**: `.cache/mac-runtime/wine-steam10/wswine.bundle/lib/wine/x86_64-windows/dxgi.dll`이 이전 테스트 중 DXMT `dxgi.dll`(1.89MB)로 덮어써져 있어 1차 패키징 시 DXMT `dxgi.dll`이 `dxgi-d3d12`로 복사되었고, 기존 실행 중이던 `steam.exe` 프로세스가 이전 환경변수를 유지하고 있었음. `prepare-metal-runtime.py`에서 원본 크기(x64 `237,568` bytes, x86 `225,294` bytes)를 검증·복원하도록 수정하여 해결.
+- 변경 파일 및 구현 내용:
+  - `scripts/prepare-metal-runtime.py`:
+    - `Runtime/lib/libvulkan.1.dylib -> libMoltenVK.dylib`, `libvulkan.dylib -> libMoltenVK.dylib` 심볼릭 링크 생성.
+    - Wine 원본 `dxgi.dll`(237,568 bytes)을 아카이브에서 검증·복원한 뒤 `Wine builtin DLL` 서명을 `Wine native  DLL`로 패치하여 `Runtime/lib/wine/dxgi-d3d12/{x86_64-windows,i386-windows}/dxgi.dll`에 보존.
+    - 기본 `Runtime/lib/wine/{x86_64-windows,i386-windows}/dxgi.dll` 및 `d3d11.dll`은 DXMT(SetRotation 패치 포함) 유지.
+  - `Sources/MacDeck/Library.swift`:
+    - `GraphicsBackend`(`auto`, `dxmt`, `d3d12`) 및 `DirectX12Support` 구현.
+    - 게임 폴더 내 `D3D12/D3D12Core.dll`, `d3d12.dll`, `.ini`의 `Capability=DirectX12`, 실행 파일의 `D3D12CreateDevice` 임포트 여부를 자동 감지.
+    - D3D12 게임에는 `dxgi-d3d12`의 Wine `dxgi.dll`(237KB)을 실행 폴더에 자동 배치하고, DXMT 전환 시 관리 대상 `dxgi.dll`만 정리(서드파티 `dxgi.dll`은 보존).
+    - `WINEDLLOVERRIDES`를 `dxgi=n,b;d3d11,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b`로 설정해 D3D10/11(DXMT)과 D3D12(VKD3D/MoltenVK) 동시 지원.
+  - `Sources/MacDeck/SteamStorage.swift`, `Sources/MacDeck/ExternalLibrary.swift`, `Sources/MacDeck/Runtime.swift`:
+    - `autoConnectAll` 및 `reconnectExternalLibraries` 추가: 앱 시작(`start()`) 및 게임 새로고침 시 `library.json`에 설정된 외장 게임 설치 폴더(`externalLibraries`)가 연결되어 있으면 Wine `dosdevices/<drive>:` 심볼릭 링크를 자동 생성/마이그레이션(`E:\SteamLibrary`)하고 Steam `libraryfolders.vdf` 등록 상태를 자동 복구.
+    - `library.json`에 `driveFolder`가 없던 기존 항목도 `nonRootMapping` 기준으로 일관되게 인식 및 마이그레이션되도록 수정.
+  - `Sources/MacDeck/App.swift`, `Sources/MacDeck/Diagnostics.swift`, `Sources/MacDeck/SelfTests.swift`:
+    - 게임 실행 설정에 그래픽 백엔드 선택기 추가, 진단 요약에 D3D12/IWineDXGIAdapter 단서 추가, 자체 검사 **68개**로 확장.
+- 실제 실행한 검증과 결과:
+  - `bash scripts/package-mac-app.sh` 실행 → **68 checks passed** (`evidence/v05-d3d12-tests.log`), `codesign --verify --strict` 통과.
+  - `re3.exe`(Resident Evil 3, DirectX 12) 실제 실행 검증: `vkd3d 1.14` → `winevulkan` → `MoltenVK 1.4.1` → `Apple M5 (Metal 3)` 장치 생성, `RESIDENT EVIL 3` 창(`1518x994`) 및 `d3d12_swapchain_Present` 정상 동작 확인 (`evidence/re3-d3d12-moltenvk.log`).
+  - `/Users/sjhdeux/Applications/MacDeck.app` 설치본 교체 및 재시작 후 `library.json`에 `driveFolder: "/Volumes/NVME_1T"` 자동 반영, `RE3/dxgi.dll`(237,568 bytes) 배포, 새 Steam 세션(v0.5.0) 시작 확인.
+

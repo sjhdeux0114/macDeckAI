@@ -145,6 +145,7 @@ final class DeckModel: ObservableObject {
         do {
             let game = try Game.importing(url)
             if let existing = library.games.first(where: { $0.path == game.path }) { selected = existing.id; page = "library"; return }
+            _ = try? DirectX12Support.prepare(game: game, wine: runtime.path)
             var data = library
             data.games.append(game)
             try commit(data)
@@ -166,6 +167,7 @@ final class DeckModel: ObservableObject {
     func saveGame(_ game: Game) {
         do {
             guard let index = library.games.firstIndex(where: { $0.id == game.id }) else { return }
+            _ = try? DirectX12Support.prepare(game: game, wine: runtime.path)
             var data = library
             data.games[index] = game
             try commit(data)
@@ -479,9 +481,21 @@ final class DeckModel: ObservableObject {
     var steamInstalled: Bool { SteamClient(disk: disk).executable != nil }
     var steamGameCount: Int { library.games.filter { $0.steamAppID != nil }.count }
 
+    func reconnectExternalLibraries(steamRunning: Bool = false) {
+        guard writable, let existing = library.externalLibraries, !existing.isEmpty else { return }
+        let service = SteamStorage(client: SteamClient(disk: disk))
+        let updated = service.autoConnectAll(existing, steamRunning: steamRunning)
+        if updated != existing {
+            var data = library
+            data.externalLibraries = updated
+            try? commit(data)
+        }
+    }
+
     func start() {
         guard !didStart else { return }
         didStart = true
+        reconnectExternalLibraries(steamRunning: false)
         refreshSteamGames(silent: true)
         if CommandLine.arguments.contains("--setup-steam") { installSteam() }
         else if CommandLine.arguments.contains("--steam") || (steamInstalled && (library.startSteamOnLaunch ?? true)) { launchSteam() }
@@ -495,6 +509,7 @@ final class DeckModel: ObservableObject {
     func launchSteam() {
         guard steamInstalled else { installSteam(); return }
         do {
+            reconnectExternalLibraries(steamRunning: sessions.contains(where: { id in library.games.first(where: { $0.id == id })?.steamAppID == nil }))
             var steam = try SteamClient(disk: disk).entry()
             var data = library
             if let index = data.games.firstIndex(where: { $0.path == steam.path && $0.steamAppID == nil }) {
@@ -515,13 +530,17 @@ final class DeckModel: ObservableObject {
     func refreshSteamGames(silent: Bool = false) {
         guard writable, steamInstalled else { return }
         do {
+            reconnectExternalLibraries(steamRunning: true)
             let found = try SteamClient(disk: disk).installedGames()
             var data = library
+            let winePath = runtime.path ?? Runtime.inspect(custom: library.winePath).path
             for var game in found {
                 if let index = data.games.firstIndex(where: { $0.steamAppID == game.steamAppID }) {
                     game.id = data.games[index].id; game.added = data.games[index].added; game.lastPlayed = data.games[index].lastPlayed
+                    game.graphicsBackend = data.games[index].graphicsBackend
                     data.games[index] = game
                 } else { data.games.append(game) }
+                _ = try? DirectX12Support.prepare(game: game, wine: winePath)
             }
             if data.games != library.games { try commit(data) }
             if !silent { steamProgress = "설치된 Steam 게임 \(found.count)개를 확인했습니다. 전체 보유 라이브러리는 Steam에서 볼 수 있습니다." }

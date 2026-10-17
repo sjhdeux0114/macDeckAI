@@ -21,15 +21,16 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
    - 공식 Windows Steam 클라이언트를 백그라운드 환경에 설치하고, Steam Big Picture 모드를 한 번의 클릭 또는 패드 입력으로 실행.
    - Steam 라이브러리(`libraryfolders.vdf`, `appmanifest`)를 자동 파싱하여 MacDeck 런처에 동기화.
 
-2. **Apple Metal 하드웨어 가속 그래픽 파이프라인**
+2. **Apple Metal 하드웨어 가속 듀얼 그래픽 파이프라인 (DX10/11 & DX12)**
    - **WineSikarugir 10.0 (x86_64, Rosetta 2)** 기반 호환성 레이어.
-   - **DXMT 0.80** (Direct3D 10/11 → Apple Metal 변환 엔진) 탑재.
-   - DXMT의 `SetRotation(IDENTITY)` 호환 패치를 적용하여 SDL2/D3D11 게임의 조용한 OpenGL 강제 대체를 방지하고 온전한 Metal 가속 달성.
+   - **DirectX 10 / 11 → DXMT 0.80**: Direct3D 10/11 호출을 Apple Metal로 직접 변환하며, `SetRotation(IDENTITY)` 호환 패치를 적용하여 SDL2/D3D11 게임의 OpenGL 강제 대체를 방지.
+   - **DirectX 12 → VKD3D 1.14 + MoltenVK 1.4.1**: 게임 폴더 내 Agility SDK(`D3D12Core.dll`), 설정 파일(`Capability=DirectX12`), 또는 실행 파일 임포트를 자동 감지하여 Wine D3D12 DXGI 브리지와 MoltenVK(`libvulkan.1.dylib`)를 통해 Apple Metal 3로 가속.
    - Apple Metal HUD (`⌘F9`) 및 프레임 레이트/GPU 부하 실시간 모니터링 지원.
 
-3. **외장 SSD/HDD 게임 라이브러리 지원**
-   - 내장 SSD 용량이 부족한 Mac 환경을 위해 외장 저장장치(NVMe/SSD/HDD)의 게임 설치 폴더를 Wine 가상 드라이브(D:, E: 등)로 매핑.
-   - Steam의 `libraryfolders.vdf` 설정을 안전하게 백업 및 갱신하여 외장 라이브러리로 자동 등록 및 해제(게임 파일 보존).
+3. **외장 SSD/HDD 게임 라이브러리 지원 및 시작 시 자동 연결**
+   - 내장 SSD 용량이 부족한 Mac 환경을 위해 외장 저장장치(NVMe/SSD/HDD)의 게임 설치 폴더를 Wine 가상 드라이브(`E:\SteamLibrary` 등)로 매핑.
+   - **앱 실행 시 설정된 외장 게임 설치 폴더가 있으면 드라이브 심볼릭 링크와 Steam `libraryfolders.vdf` 등록 상태를 자동으로 연결·복구**.
+   - 연결 해제 시에도 외장 드라이브의 실제 게임 파일은 안전하게 보존.
 
 4. **게임패드 완벽 지원 (콘솔 모드)**
    - Apple GameController 프레임워크 및 SDL2 기반 DualShock 4, DualSense, Xbox 등 컨트롤러 인식.
@@ -38,8 +39,8 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
 
 5. **정밀한 3D 게임 크래시 분석 및 진단 시스템 (Diagnostics)**
    - 각 게임 실행마다 고유 UUID 기반 격리 로그 디렉터리 생성.
-   - DXMT 그래픽 렌더러 로그(`Renderer/`)와 프로세스 출력(`process.log`) 분리 저장.
-   - GPU 장치 손실(Device Loss), 셰이더 컴파일 오류, DLL 예외 패턴을 자동 분석하여 `summary.txt` 단서 제공.
+   - DXMT/렌더러 로그(`Renderer/`)와 프로세스 출력(`process.log`) 분리 저장.
+   - GPU 장치 손실(Device Loss), D3D12 어댑터/장치 생성 실패(`IWineDXGIAdapter` / `D3D12CreateDeviceFailed`), 셰이더 컴파일 오류, DLL 예외 패턴을 자동 분석하여 `summary.txt` 단서 제공.
    - 원클릭 **진단 ZIP 내보내기** 기능으로 디버깅과 리포팅 용이.
 
 ---
@@ -53,18 +54,18 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
 - **향후 계획:**
   - 1차 검증은 완료되었으나, DirectDraw, Direct3D 9, SDL 소프트웨어 렌더러, 레거시 OpenGL 등 다양한 그래픽 엔진을 사용하는 **더 많은 종류의 2D 인디/클래식 게임을 추가 테스트**하여 호환성을 폭넓게 확보할 예정입니다.
 
-### 🎲 3D 게임: 집중 테스트 및 최적화 진행 중
+### 🎲 3D 게임: DX11(DXMT) & DX12(VKD3D/MoltenVK) 파이프라인 구축 및 집중 테스트 진행 중
 - **현재 상태:**
-  - Direct3D 10/11 게임을 Apple Metal로 번역하는 DXMT 그래픽 파이프라인이 구성되어 있습니다.
-  - 3D 게임 실행 시 발생하는 크래시와 호환성 이슈를 추적하기 위해 세션별 정밀 진단 시스템(로그 수집, 셰이더 오류 단서 요약, ZIP 내보내기)이 마련되어 있습니다.
+  - **Direct3D 10/11 (DXMT → Metal)** 및 **Direct3D 12 (VKD3D 1.14 → winevulkan → MoltenVK 1.4.1 → Metal 3)** 듀얼 가속 파이프라인이 구축되어 있습니다.
+  - 외장 NVMe 드라이브(`E:\SteamLibrary`)에 설치된 **Resident Evil 3 (`re3.exe`, DirectX 12)** 실행 시 Apple M5 Metal 3 장치 생성 및 스왑체인 렌더링(`d3d12_swapchain_Present`) 초기 구동 확인을 완료했습니다.
+  - 각 게임 실행 설정에서 그래픽 백엔드를 **자동 감지(DX11/DX12)** 하거나 수동으로 전환할 수 있습니다.
 - **향후 계획:**
-  - 3D 게임은 복잡한 셰이더 연산, Direct3D 12(VKD3D-Proton 필요 여부), 안티치트(Anti-Cheat) 솔루션, 런타임 종속성(Visual C++ 재배포 패키지 등) 등 다양한 변수가 존재하므로 **테스트를 집중적으로 많이 수행해봐야 하는 단계**입니다.
-  - 진단 시스템을 활용하여 각 3D 타이틀별 오류 패턴(GPU Timeout, Missing Extensions, Memory Limit 등)을 분석하고 순차적으로 호환성을 개선해 나갈 계획입니다.
+  - 3D 게임은 복잡한 셰이더 연산, 엔진별 DirectX 11/12 특성, 안티치트(Anti-Cheat) 솔루션, 런타임 종속성(Visual C++ 재배포 패키지 등), 장시간 플레이 안정성 등 다양한 변수가 존재하므로 **앞으로도 다양한 3D 타이틀을 대상으로 테스트를 집중적으로 많이 수행해봐야 하는 단계**입니다.
+  - 진단 시스템을 활용하여 각 3D 타이틀별 오류 패턴을 분석하고 순차적으로 호환성을 개선해 나갈 계획입니다.
 
-### ☁️ Steam 클라이언트 및 계정
-- Valve 공식 Windows SteamSetup.exe를 통한 무인 설치 및 최신 클라이언트 업데이트 완료.
-- Big Picture 모드 시작 및 QR 코드 / 계정 로그인 화면 진입 검증 완료.
-- 사용자의 실제 계정 로그인 후 Steam 상점/라이브러리를 통한 게임 다운로드 및 Steam 연계 실행에 대한 추가 검증이 진행 중입니다.
+### ☁️ Steam 클라이언트 및 외장 스토리지 연동
+- Valve 공식 Windows `SteamSetup.exe`를 통한 설치, 최신 클라이언트 업데이트, Big Picture 로그인 및 외장 NVMe SSD(`E:\SteamLibrary`) 게임 다운로드·설치 검증 완료.
+- 앱 재실행 시 설정된 외장 게임 설치 폴더 자동 재연결 및 총 **68개 자체 검증 테스트(`--self-test`) 통과**.
 
 ---
 
@@ -73,8 +74,8 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    MacDeck.app (SwiftUI / AppKit arm64)         │
-│  - 라이브러리 관리       - 외장 드라이브 마운트    - 게임패드 내비게이션   │
-│  - 진단 및 ZIP 내보내기  - Steam 자동 제어        - 세션 로깅          │
+│  - 라이브러리 관리       - 외장 드라이브 자동 연결 - 게임패드 내비게이션 │
+│  - 진단 및 ZIP 내보내기  - DX11/DX12 자동 감지   - 세션 로깅          │
 └─────────────────────────────────┬───────────────────────────────┘
                                   │ 실행 (LaunchPlan)
                                   ▼
@@ -83,19 +84,20 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
 │  - Windows 환경 에뮬레이션 (drive_c, dosdevices)                  │
 │  - Windows Steam (Big Picture) & Windows Game .exe              │
 │  - Builtin XInput 게임패드 지원                                   │
-└─────────────────────────────────┬───────────────────────────────┘
-                                  │ Direct3D 10 / 11 API 호출
-                                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│               DXMT 0.80 (SetRotation IDENTITY 패치)              │
-│  - Direct3D 10/11 API → Metal API 변환                           │
-│  - _macdrv_functions Metal View 연동                            │
-└─────────────────────────────────┬───────────────────────────────┘
+└──────────────────┬──────────────────────────────┬───────────────┘
+   Direct3D 10/11  │                              │ Direct3D 12
+                   ▼                              ▼
+┌──────────────────────────────────┐ ┌────────────────────────────┐
+│  DXMT 0.80 (SetRotation 패치)    │ │ Wine D3D12 (VKD3D 1.14)    │
+│  - D3D10/11 → Metal 직접 변환     │ │ + Wine DXGI Native Bridge  │
+│  - _macdrv_functions Metal View  │ │ + MoltenVK 1.4.1 (Vulkan)  │
+└──────────────────┬───────────────┘ └────────────┬───────────────┘
+                   └──────────────┬───────────────┘
                                   │ Metal 커맨드 인코딩
                                   ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Apple Metal (Apple Silicon GPU)             │
-│  - M-Series GPU 하드웨어 가속                                    │
+│  - M-Series GPU 하드웨어 가속 (Metal 3)                          │
 │  - Metal Performance HUD 실시간 오버레이                          │
 └─────────────────────────────────────────────────────────────────┘
 ```

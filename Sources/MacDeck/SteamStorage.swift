@@ -12,31 +12,51 @@ struct SteamStorage {
         path.replacingOccurrences(of: "\\", with: "/").trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
     }
     func registered(_ storage: ExternalLibrary) -> Bool {
+        let target = Self.normalized(storage.nonRootMapping.windowsLibraryPath)
         guard let file = files.first, let text = try? String(contentsOf: file), let entries = try? VDF.parse(text)["libraryfolders"]?.object else { return false }
-        return entries.values.contains { Self.normalized($0.object?["path"]?.string ?? "") == Self.normalized(storage.windowsLibraryPath) }
+        return entries.values.contains { Self.normalized($0.object?["path"]?.string ?? "") == target }
     }
 
     func migrateMapping(_ storage: ExternalLibrary) throws -> ExternalLibrary {
         let corrected = storage.nonRootMapping
-        guard corrected.mappingRoot != storage.mappingRoot else { return storage }
         let link = client.prefix.appendingPathComponent("dosdevices/" + storage.drive + ":")
-        let target = try FileManager.default.destinationOfSymbolicLink(atPath: link.path)
-        guard target == storage.mappingRoot.path else { throw DeckError.message("드라이브 매핑이 변경되어 복구를 중단했습니다.") }
-        try FileManager.default.removeItem(at: link)
-        do { try FileManager.default.createSymbolicLink(at: link, withDestinationURL: corrected.mappingRoot) }
-        catch { try? FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: target); throw error }
+        let fm = FileManager.default
+        if let target = try? fm.destinationOfSymbolicLink(atPath: link.path) {
+            let normalizedTarget = URL(fileURLWithPath: target, isDirectory: false).standardizedFileURL.path
+            if normalizedTarget == corrected.mappingRoot.path { return corrected }
+            guard normalizedTarget == storage.mappingRoot.path else { throw DeckError.message("드라이브 매핑이 변경되어 복구를 중단했습니다.") }
+            try fm.removeItem(at: link)
+            do { try fm.createSymbolicLink(at: link, withDestinationURL: corrected.mappingRoot) }
+            catch { try? fm.createSymbolicLink(atPath: link.path, withDestinationPath: target); throw error }
+        } else if corrected.connected {
+            try fm.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.createSymbolicLink(at: link, withDestinationURL: corrected.mappingRoot)
+        }
         return corrected
     }
 
+    func autoConnectAll(_ storages: [ExternalLibrary], steamRunning: Bool) -> [ExternalLibrary] {
+        guard !storages.isEmpty else { return storages }
+        return storages.map { item in
+            guard item.connected else { return item.nonRootMapping }
+            let migrated = (try? migrateMapping(item)) ?? item.nonRootMapping
+            if !steamRunning && !registered(migrated) {
+                try? update(migrated, removing: false, steamRunning: false)
+            }
+            return migrated
+        }
+    }
+
     func recognition(_ storage: ExternalLibrary) -> String {
-        guard registered(storage) else { return "폴더만 연결됨 · Steam 적용 필요" }
+        let resolved = storage.nonRootMapping
+        guard registered(resolved) else { return "폴더만 연결됨 · Steam 적용 필요" }
         guard let root = client.root,
               let handle = try? FileHandle(forReadingFrom: root.appendingPathComponent("logs/content_log.txt")) else { return "Steam 설정 등록됨 · 인식 확인 대기" }
         defer { try? handle.close() }
         let size = (try? handle.seekToEnd()) ?? 0
         try? handle.seek(toOffset: size > 524288 ? size - 524288 : 0)
         let lines = String(decoding: (try? handle.readToEnd()) ?? Data(), as: UTF8.self).components(separatedBy: .newlines)
-        let target = Self.normalized(storage.windowsLibraryPath)
+        let target = Self.normalized(resolved.windowsLibraryPath)
         for line in lines.reversed() {
             let text = line.replacingOccurrences(of: "\\", with: "/").lowercased()
             if text.contains("install folder " + target + " not mounted") { return "Steam이 드라이브를 인식하지 못함 · 다시 적용 필요" }

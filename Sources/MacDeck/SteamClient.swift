@@ -105,7 +105,7 @@ struct SteamClient {
         let relative = String(path.dropFirst(2)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !relative.split(separator: "/").contains("..") else { return nil }
         let base = drive == "c" ? prefix.appendingPathComponent("drive_c") : prefix.appendingPathComponent("dosdevices/" + drive + ":").resolvingSymlinksInPath()
-        return relative.isEmpty ? base.standardizedFileURL : base.appendingPathComponent(relative).standardizedFileURL
+        return relative.isEmpty ? URL(fileURLWithPath: base.path, isDirectory: false).standardizedFileURL : base.appendingPathComponent(relative, isDirectory: false).standardizedFileURL
     }
 
     func installedGames() throws -> [Game] {

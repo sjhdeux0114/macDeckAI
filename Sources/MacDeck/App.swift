@@ -117,11 +117,11 @@ struct DeckView: View {
             Spacer()
             VStack(alignment: .leading, spacing: 9) {
                 Label("DIRECT3D → METAL", systemImage: "sparkles").font(.system(size: 10, weight: .bold)).foregroundStyle(accent)
-                Text("DXMT · macOS").font(.system(size: 12)).foregroundStyle(.secondary)
-                Text("Direct3D 10 / 11 게임 지원 경로").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("DXMT · VKD3D / MoltenVK").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("Direct3D 10 / 11 / 12 게임 지원").font(.system(size: 10)).foregroundStyle(.secondary)
             }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
             Button("데이터 폴더 열기", action: model.revealData).buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 12)
-            Text("MacDeck · Preview 0.4.1").font(.system(size: 10)).foregroundStyle(.tertiary).padding(.top, 6)
+            Text("MacDeck · Preview 0.5.0").font(.system(size: 10)).foregroundStyle(.tertiary).padding(.top, 6)
         }.padding(20).background(Color(red: 0.075, green: 0.085, blue: 0.1))
     }
 
@@ -221,7 +221,7 @@ struct DeckView: View {
     var runtimePage: some View {
         VStack(alignment: .leading, spacing: 22) {
             Text("Metal로 이어지는 실행 환경").font(.system(size: 29, weight: .bold))
-            Text("Direct3D 10 / 11 → DXMT → Apple Metal").foregroundStyle(accent)
+            Text("Direct3D 10 / 11 (DXMT) · Direct3D 12 (VKD3D / MoltenVK) → Apple Metal").foregroundStyle(accent)
             panel("Wine 런타임", icon: "shippingbox") {
                 Text(model.runtime.path ?? "연결된 Wine이 없습니다").font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
                 Text(model.runtime.version).font(.callout).foregroundStyle(.secondary)
@@ -238,7 +238,7 @@ struct DeckView: View {
             }
             panel("그래픽 검증", icon: "sparkles") {
                 Text("게임 실행 시 Metal HUD와 DXMT 로그를 켭니다.")
-                Text("내장 환경은 DXMT의 Metal 화면 API를 지원하는 Wine입니다. 일반 Wine으로 교체하면 화면 생성이 실패할 수 있습니다. Direct3D 12는 현재 이 백엔드의 지원 범위에 포함되지 않습니다.").font(.callout).foregroundStyle(.secondary)
+                Text("Direct3D 10/11 게임은 DXMT를 통해, Direct3D 12 게임은 Wine VKD3D + MoltenVK 브리지를 통해 Metal로 가속합니다. 각 게임의 실행 설정에서 그래픽 백엔드를 자동 감지하거나 직접 지정할 수 있습니다.").font(.callout).foregroundStyle(.secondary)
                 Button("로그 및 데이터 폴더", action: model.revealData)
             }
         }
@@ -321,7 +321,7 @@ struct DeckView: View {
                     VStack(alignment: .leading, spacing: 5) {
                         Label(storage.windowsPath + " · " + (storage.connected ? storage.availableSpace : "드라이브 연결 필요"), systemImage: storage.connected ? "externaldrive.fill" : "externaldrive.badge.exclamationmark")
                         Text(storage.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                        Text(model.externalLibraryRecognition(storage) + " · " + storage.windowsLibraryPath).font(.caption).foregroundStyle(model.externalLibraryRegistered(storage) ? accent : .orange)
+                        Text(model.externalLibraryRecognition(storage) + " · " + storage.nonRootMapping.windowsLibraryPath).font(.caption).foregroundStyle(model.externalLibraryRegistered(storage) ? accent : .orange)
                         HStack {
                             Button("Steam에 적용하고 시작") { model.applyExternalLibrary(storage) }.disabled(!storage.connected || model.managingStorage || model.downloadingSteam)
                             Button("연결 해제 (게임 파일 유지)") { model.applyExternalLibrary(storage, removing: true) }.disabled(model.managingStorage || model.downloadingSteam)
@@ -333,7 +333,7 @@ struct DeckView: View {
             }
             panel("설치된 Steam 게임", icon: "square.grid.2x2") {
                 Text("MacDeck에 연결된 게임 \(model.steamGameCount)개").font(.headline)
-                Text("Steam에서 게임을 설치하면 자동으로 확인해 라이브러리에 추가합니다. 게임은 같은 Steam 환경에서 실행되고 Direct3D 10/11은 Metal 경로를 사용합니다.").font(.callout).foregroundStyle(.secondary)
+                Text("Steam에서 게임을 설치하면 자동으로 확인해 라이브러리에 추가합니다. Direct3D 10/11(DXMT)과 Direct3D 12(VKD3D/MoltenVK) 게임 모두 Metal 가속 경로를 사용합니다.").font(.callout).foregroundStyle(.secondary)
                 Button("MacDeck 라이브러리 보기") { model.page = "library" }
                 Text("게임 카드 메뉴에서 실행별 진단 폴더와 ZIP을 열 수 있습니다. Steam 게임의 그래픽 로그는 Steam 항목의 진단 폴더에서도 확인하세요.").font(.caption).foregroundStyle(.secondary)
             }
@@ -369,6 +369,12 @@ struct GameEditor: View {
             Text("실행 인수 · JSON 문자열 배열").font(.caption).foregroundStyle(.secondary)
             TextEditor(text: $arguments).font(.system(size: 12, design: .monospaced)).frame(height: 74).border(.white.opacity(0.1))
             if game.kind == .windows {
+                Picker("그래픽 백엔드", selection: Binding(get: { game.graphicsBackend ?? .auto }, set: { game.graphicsBackend = $0 == .auto ? nil : $0 })) {
+                    ForEach(GraphicsBackend.allCases, id: \.self) { backend in
+                        Text(backend.label).tag(backend)
+                    }
+                }
+                Text("현재 적용 경로: " + DirectX12Support.effectiveBackend(for: game).label).font(.caption).foregroundStyle(accent)
                 TextField("Windows 환경 폴더 · 비워두면 게임별 자동 생성", text: Binding(get: { game.prefix ?? "" }, set: { game.prefix = $0.isEmpty ? nil : $0 }))
             }
             Text("인수 예: [\"-windowed\", \"-width\", \"1280\"]. 쉘 명령은 실행하지 않습니다.").font(.caption).foregroundStyle(.secondary)

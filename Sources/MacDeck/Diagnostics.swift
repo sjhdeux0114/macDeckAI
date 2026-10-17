@@ -116,6 +116,8 @@ final class SessionDiagnostics {
         let record = try decoder.decode(SessionRecord.self, from: Data(contentsOf: folder.appendingPathComponent("diagnostics.json")))
         let patterns: [(String, String)] = [
             ("createmetalview", "Metal 화면 생성 경로를 확인하세요."),
+            ("17399d75-964e-4c03-99f8-9d4fd196dd62", "Direct3D 12 어댑터 인터페이스(IWineDXGIAdapter) 조회 단서입니다. 게임 실행 설정에서 DirectX 12(VKD3D · MoltenVK) 백엔드와 D3D12용 dxgi.dll 적용 상태를 확인하세요."),
+            ("d3d12createdevicefailed", "Direct3D 12 장치 생성 실패 단서입니다. MoltenVK(libvulkan.1.dylib) 연결 및 D3D12 백엔드 구성을 확인하세요."),
             ("dxgi_error_device_removed", "GPU 장치 손실이 기록됐습니다. GPU/셰이더 로그와 재현 상황을 함께 확인하세요."),
             ("dxgi_error_device_hung", "GPU 작업 정지가 기록됐습니다. 셰이더와 프레임 제출 경로를 확인하세요."),
             ("failed to compile", "컴파일 실패 단서입니다. 해당 셰이더/오류 메시지를 확인하세요."),
