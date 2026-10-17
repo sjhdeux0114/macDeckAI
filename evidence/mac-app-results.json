@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-17T22:54:47.236501+09:00",
+  "app": "/Users/sjhdeux/Documents/macdeck/dist/MacDeck.app",
+  "game": "Brogue CE 1.15.1 Windows x86_64",
+  "backend": "WineCX 24.0.7 + DXMT 0.80 + identity rotation fix → Apple Metal",
+  "gameSceneVerified": true,
+  "metalHUDVerified": true,
+  "appLaunchPathVerified": true,
+  "verificationMethod": "Actual game window images and Metal HUD; no claims about all games",
+  "screenshots": [
+    "evidence/macdeck-game-metal.png",
+    "evidence/macdeck-app.png"
+  ],
+  "steam": "not tested",
+  "direct3D12": "not supported by this backend",
+  "threeDimensionalGame": "not tested",
+  "appSelfTests": 10,
+  "rotationPatchTests": "byte range, unknown hash rejection, actual x64 Windows ABI return values",
+  "runtimeManifest": {
+    "artifacts": [
+      {
+        "file": "winecx.tar.xz",
+        "url": "https://github.com/Sikarugir-App/Engines/releases/download/v1.0/WS12WineCX24.0.7_7.tar.xz",
+        "sha256": "203f9e9fd6c2cc77e6525d798a434ced326145db34a356355e05659d3445fd1c"
+      },
+      {
+        "file": "wine.tar.xz",
+        "url": "https://github.com/Gcenx/macOS_Wine_builds/releases/download/11.0_1/wine-stable-11.0_1-osx64.tar.xz",
+        "sha256": "b50dc50ec7f41d58b115a6b685d4d1315ba3c797bd3aa0f49213f2703cb82388"
+      },
+      {
+        "file": "dxmt.tar.gz",
+        "url": "https://github.com/3Shain/dxmt/releases/download/v0.80/dxmt-v0.80-builtin.tar.gz",
+        "sha256": "8f260e36b5739e68f3bad613381441385c4dc7b85b78ba8de653d5a6a264529d"
+      },
+      {
+        "file": "brogue.zip",
+        "url": "https://github.com/tmewett/BrogueCE/releases/download/v1.15.1/BrogueCE-1.15.1-windows-x86_64.zip",
+        "sha256": "29dcbae1791156a040c9125d0a28ae97d67a09b22a52266af1c65e2918bede5f"
+      }
+    ],
+    "dxmtSource": "https://github.com/3Shain/dxmt/tree/589adb780354b461645b29999cefaf533594ee99",
+    "identityPatch": {
+      "functions": {
+        "_ZN4dxmt17MTLD3D11SwapChainILb1EE11SetRotationE18DXGI_MODE_ROTATION": 813120,
+        "_ZN4dxmt17MTLD3D11SwapChainILb0EE11SetRotationE18DXGI_MODE_ROTATION": 797920
+      },
+      "sha256": "cafb32ba2b58e2e8decc1d6feabccdc131e1bf186713b34913a98974f94a3f02"
+    },
+    "supportedTest": "Brogue CE Windows x64, Direct3D 11 via DXMT to Metal"
+  },
+  "binarySHA256": "ee0fae4e5360d30e29bcba39850f466b1fd756596f866c2269002f1a84410cd0",
+  "normalLaunchStatus": "Final app opened via Launch Services; game initialization is waiting for macOS Documents-folder consent for MacDeck.",
+  "priorAppIntegrationTest": "Windows game successfully rendered with Metal HUD through the same DeckModel launch path before final packaging."
+}

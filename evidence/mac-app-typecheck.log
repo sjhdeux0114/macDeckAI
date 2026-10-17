@@ -1,0 +1,15 @@
+Sources/MacDeck/Runtime.swift:198:71: warning: class method 'sleep' is unavailable from asynchronous contexts; Use Task.sleep(until:clock:) instead.; this is an error in the Swift 6 language mode
+196 |                 try process.run()
+197 |                 let deadline = Date().addingTimeInterval(10)
+198 |                 while process.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
+    |                                                                       `- warning: class method 'sleep' is unavailable from asynchronous contexts; Use Task.sleep(until:clock:) instead.; this is an error in the Swift 6 language mode
+199 |                 if process.isRunning { process.terminate(); result = "검사 시간 초과" }
+200 |                 else {
+
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Foundation.framework/Headers/NSThread.h:69:1: note: 'sleep(forTimeInterval:)' declared here
+ 67 | ///
+ 68 | /// - Parameter ti: The duration of the sleep.
+ 69 | + (void)sleepForTimeInterval:(NSTimeInterval)ti NS_SWIFT_UNAVAILABLE_FROM_ASYNC("Use Task.sleep(until:clock:) instead.");
+    | `- note: 'sleep(forTimeInterval:)' declared here
+ 70 | 
+ 71 | /// Terminates the current thread.

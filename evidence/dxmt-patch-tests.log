@@ -1,0 +1,4 @@
+PASS: only two pinned x64 SetRotation functions changed; other bytes intact
+PASS: modified or unknown input DLL is rejected
+Patched SHA256: cafb32ba2b58e2e8decc1d6feabccdc131e1bf186713b34913a98974f94a3f02
+PASS: Windows x64 ABI stub returns S_OK only for IDENTITY; unsupported rotations stay E_NOTIMPL

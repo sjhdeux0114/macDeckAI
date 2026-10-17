@@ -1,0 +1,8 @@
+
+PASS: actual Windows cmd.exe wrote through D: into the mapped Unicode storage folder
+Traceback (most recent call last):
+  File "/Users/sjhdeux/Documents/macdeck/scripts/test-external-wine.py", line 31, in <module>
+    subprocess.run([str(runtime / 'bin/wineserver'), '-k'], env=env, check=True, timeout=15)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py", line 528, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/Users/sjhdeux/Documents/macdeck/dist/MacDeck.app/Contents/Resources/Runtime/bin/wineserver', '-k']' returned non-zero exit status 1.

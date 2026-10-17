@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-10-17T22:29:52.306432+09:00",
+  "upstreamCommit": "64d78aa812305d707700e2ad460f3b94d03ed50c",
+  "hostMetalComputePassed": true,
+  "linuxCPUProofPassed": true,
+  "guest4KPagesObserved": true,
+  "virtio3DCapsets": 0,
+  "toolTestsPassed": true,
+  "iPadCompilation": "blocked",
+  "steam": "not tested",
+  "proton": "not tested",
+  "windowsGames": "not tested",
+  "hashes": {
+    "Sources/MacDeckProbe/main.swift": "ed0be7defd7e69cf53a01f804bc836c51af97cdb79192382b69f9c07a38407b3",
+    "scripts/audit-source.py": "440b48dec456377dd63e5cf33e07f44831ea178d8f6d0ff0e5492a337e5fa4ca",
+    "scripts/build.sh": "522f1e217b8a9ae3dc2059dc970ae9bdfd472ad9d32d0b6b8a2fdac5360f5bdb",
+    "scripts/check-ipados.py": "3f9b554c0eb3c06a75f9a18a6b976e9e1baf8a833c23d9a6c7e9d3c89cc8cea7",
+    "scripts/check-native-load.py": "53e8ed9201f34e71c3efb9c6fcbb5a488c95094766244218ebee5efe57788e0a",
+    "scripts/extract-kernel.py": "a2d6eb7100d1d6bf44587a9f41f0b06a4198eefb8c6ae47f7b99b540b2f531e4",
+    "scripts/fetch-upstream.sh": "b5e3bb54ff5b15c67df33f9fcb3d7ecba1416962fdbd0fbb3459339db9e02f29",
+    "scripts/macdeck-init": "017b405590d362fbac6c32f2ddfac478ceb2e0838aa2834bad6e74d1a3dae5f6",
+    "scripts/prepare-linux.sh": "2213d549b4b17756dfe49f5ebeaa9709d42d4c0058f52f0ecce2be2eef559758",
+    "scripts/summarize.py": "e66b1f58bb7b0435d82efc081c90784fab559b059c14944f8811e0c1e3c372ee",
+    "scripts/test-tools.py": "c6dbb4356f22be136647001bae368239f0ca6f2b6096d8b7c51c780fcbc5b083",
+    "scripts/verify.sh": "305e8c222537d4a2b72e53af453b6915487c6cd36098059f24f1348dbd49b95f",
+    "scripts/virtualization.entitlements": "915e2b39357ecf8d211dc7fac43195c9cdcf55a0a1ecdbf931c116a4eac421f3",
+    "docs/PORTING-REPORT.ko.md": "51a4e25abbba8887e03a08599d872f0792cf76007de1ca2c43dc7c4519ff8a9f"
+  }
+}

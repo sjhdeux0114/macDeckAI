@@ -1,0 +1,44 @@
+Sources/MacDeck/ExternalLibrary.swift:28:33: warning: 'init(contentsOf:)' was deprecated in macOS 15: Use `init(contentsOf:encoding:)` instead [#DeprecatedDeclaration]
+26 |     }
+27 |     var marker: URL { URL(fileURLWithPath: path).appendingPathComponent(".macdeck-library-" + id.uuidString) }
+28 |     var connected: Bool { (try? String(contentsOf: marker)) == id.uuidString }
+   |                                 `- warning: 'init(contentsOf:)' was deprecated in macOS 15: Use `init(contentsOf:encoding:)` instead [#DeprecatedDeclaration]
+29 |     var availableSpace: String {
+30 |         guard connected, let values = try? URL(fileURLWithPath: path).resourceValues(forKeys: [.volumeAvailableCapacityKey]), let bytes = values.volumeAvailableCapacity else { return "연결되지 않음" }
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Sources/MacDeck/SteamClient.swift:116:38: warning: 'init(contentsOf:)' was deprecated in macOS 15: Use `init(contentsOf:encoding:)` instead [#DeprecatedDeclaration]
+114 |         let libraries = root.appendingPathComponent("steamapps/libraryfolders.vdf")
+115 |         if FileManager.default.fileExists(atPath: libraries.path) {
+116 |             let info = try VDF.parse(String(contentsOf: libraries))
+    |                                      `- warning: 'init(contentsOf:)' was deprecated in macOS 15: Use `init(contentsOf:encoding:)` instead [#DeprecatedDeclaration]
+117 |             for (_, value) in info["libraryfolders"]?.object ?? [:] {
+118 |                 if let path = value.object?["path"]?.string ?? value.string, let folder = windowsPath(path) {
+
+Sources/MacDeck/SteamClient.swift:127:43: warning: 'init(contentsOf:)' was deprecated in macOS 15: Use `init(contentsOf:encoding:)` instead [#DeprecatedDeclaration]
+125 |             let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+126 |             for file in files where file.lastPathComponent.hasPrefix("appmanifest_") && file.pathExtension == "acf" {
+127 |                 guard let contents = try? String(contentsOf: file), let state = try? VDF.parse(contents)["appstate"]?.object,
+    |                                           `- warning: 'init(contentsOf:)' was deprecated in macOS 15: Use `init(contentsOf:encoding:)` instead [#DeprecatedDeclaration]
+128 |                       let id = state["appid"]?.string, !id.isEmpty, id.allSatisfy(\.isNumber),
+129 |                       let name = state["name"]?.string, let flags = state["stateflags"]?.string.flatMap(Int.init), flags & 4 != 0,
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Sources/MacDeck/SteamStorage.swift:15:55: warning: 'init(contentsOf:)' was deprecated in macOS 15: Use `init(contentsOf:encoding:)` instead [#DeprecatedDeclaration]
+ 13 |     }
+ 14 |     func registered(_ storage: ExternalLibrary) -> Bool {
+ 15 |         guard let file = files.first, let text = try? String(contentsOf: file), let entries = try? VDF.parse(text)["libraryfolders"]?.object else { return false }
+    |                                                       `- warning: 'init(contentsOf:)' was deprecated in macOS 15: Use `init(contentsOf:encoding:)` instead [#DeprecatedDeclaration]
+ 16 |         return entries.values.contains { Self.normalized($0.object?["path"]?.string ?? "") == Self.normalized(storage.windowsLibraryPath) }
+ 17 |     }
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+.cache/repair-external-storage.swift:17:7: warning: variable 'game' was never mutated; consider changing to 'let' constant [#VariableNeverMutated]
+15 |   print("Steam library path:", corrected.windowsLibraryPath)
+16 |   print("Actual library location:", corrected.installRoot.path)
+17 |   var game = try service.client.entry()
+   |       `- warning: variable 'game' was never mutated; consider changing to 'let' constant [#VariableNeverMutated]
+18 |   let plan = try LaunchPlan.make(game: game, wine: wine, disk: disk)
+19 |   let process = Process(); process.executableURL = plan.executable; process.arguments = plan.arguments; process.environment = plan.environment
+
+[#VariableNeverMutated]: <https://docs.swift.org/compiler/documentation/diagnostics/variable-never-mutated>

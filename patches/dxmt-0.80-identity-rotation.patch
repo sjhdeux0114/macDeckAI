@@ -1,0 +1,13 @@
+diff --git a/src/d3d11/d3d11_swapchain.cpp b/src/d3d11/d3d11_swapchain.cpp
+index 5e9404d..5d37168 100644
+--- a/src/d3d11/d3d11_swapchain.cpp
++++ b/src/d3d11/d3d11_swapchain.cpp
+@@ -921,6 +921,8 @@ public:
+   HRESULT
+   STDMETHODCALLTYPE
+   SetRotation(DXGI_MODE_ROTATION Rotation) final {
++    if (Rotation == DXGI_MODE_ROTATION_IDENTITY)
++      return S_OK;
+     ERR("DXGISwapChain1::SetRotation: not implemented");
+     return E_NOTIMPL;
+   };

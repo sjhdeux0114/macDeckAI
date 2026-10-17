@@ -1,0 +1,9 @@
+{
+  "originalSHA256": "7ca382af0eb32d8a432f6efb14d594fefb45673663be1f7e6682254bff885c47",
+  "patchedSHA256": "cafb32ba2b58e2e8decc1d6feabccdc131e1bf186713b34913a98974f94a3f02",
+  "functions": {
+    "_ZN4dxmt17MTLD3D11SwapChainILb1EE11SetRotationE18DXGI_MODE_ROTATION": 813120,
+    "_ZN4dxmt17MTLD3D11SwapChainILb0EE11SetRotationE18DXGI_MODE_ROTATION": 797920
+  },
+  "scope": "IDENTITY returns S_OK; all other rotations E_NOTIMPL"
+}

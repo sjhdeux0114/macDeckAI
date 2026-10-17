@@ -1,0 +1,20 @@
+MacDeck session
+Game: Brogue CE · Windows
+Executable: /Users/sjhdeux/Documents/macdeck/dist/MacDeck.app/Contents/Resources/Runtime/bin/wine
+Started: 2026-10-17 13:49:42 +0000
+
+wine: configuration in L"/Users/sjhdeux/Library/Application Support/MacDeck/Bottles/3D73F3F2-1FFF-4774-B78F-A4EA36422E12" has been updated.
+info:  Failed to set Metal cache path, fallback to system default
+info:  Maximum supported feature level: D3D_FEATURE_LEVEL_11_1
+info:  Using feature level D3D_FEATURE_LEVEL_11_1
+warn:  CreateSwapChain: unsupported swap effect 3 with backbuffer size 2
+warn:  MakeWindowAssociation: Ignoring flags 1
+err:   Not implemented
+2026-10-17 22:50:04.789 brogue.exe[78919:11216687] [libMTLHud] Metric com.apple.hud-stat.frame-interval already exist
+2026-10-17 22:50:04.790 brogue.exe[78919:11216687] [libMTLHud] Metric com.apple.hud-stat.present-delay already exist
+2026-10-17 22:50:04.790 brogue.exe[78919:11216446] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fccbd9114f0 Enable HUD, ke='Command-F9', action: toggleEnabled:>, but is only supported for system-provided menu items; will not be used
+2026-10-17 22:50:04.790 brogue.exe[78919:11216687] [libMTLHud] Metric com.apple.hud-stat.fps already exist
+2026-10-17 22:50:04.790 brogue.exe[78919:11216446] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fccbd911620 Enable Logging, ke='Command-F8', action: toggleLoggingEnabled:>, but is only supported for system-provided menu items; will not be used
+2026-10-17 22:50:04.790 brogue.exe[78919:11216446] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fccbd9136d0 Reset Metrics, ke='Command-F11', action: resetMetrics:>, but is only supported for system-provided menu items; will not be used
+2026-10-17 22:50:04.790 brogue.exe[78919:11216446] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fccbd9140a0 Show Configuration Panel, ke='Command-F12', action: showConfigurationPanel:>, but is only supported for system-provided menu items; will not be used
+2026-10-17 22:50:04.790 brogue.exe[78919:11216446] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fccbd914280 Copy HUD Configuration, action: copyConfig:>, but is only supported for system-provided menu items; will not be used

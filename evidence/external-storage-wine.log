@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/Users/sjhdeux/Documents/macdeck/scripts/test-external-wine.py", line 20, in <module>
+    result = subprocess.run([str(runtime / 'bin/wine'), 'cmd.exe', '/c', r'echo MACDECK_EXTERNAL_WRITE>D:\write-check.txt'], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py", line 507, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py", line 1134, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py", line 1980, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/subprocess.py", line 1178, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/Users/sjhdeux/Documents/macdeck/dist/MacDeck.app/Contents/Resources/Runtime/bin/wine', 'cmd.exe', '/c', 'echo MACDECK_EXTERNAL_WRITE>D:\\write-check.txt']' timed out after 120 seconds

@@ -1,0 +1,3 @@
+PASS: actual failing process exit code captured
+PASS: exported ZIP contains correlated Steam graphics logs and summary
+PASS: unrelated authentication files excluded

@@ -1,0 +1,20 @@
+[
+  {
+    "kCGWindowAlpha" : 1,
+    "kCGWindowBounds" : {
+      "Height" : 780,
+      "Width" : 1160,
+      "X" : 176,
+      "Y" : 88
+    },
+    "kCGWindowIsOnscreen" : true,
+    "kCGWindowLayer" : 0,
+    "kCGWindowMemoryUsage" : 2432,
+    "kCGWindowName" : "MacDeck",
+    "kCGWindowNumber" : 4181,
+    "kCGWindowOwnerName" : "MacDeck",
+    "kCGWindowOwnerPID" : 79909,
+    "kCGWindowSharingState" : 1,
+    "kCGWindowStoreType" : 1
+  }
+]

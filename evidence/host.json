@@ -1,0 +1,13 @@
+{
+  "architecture" : "arm64",
+  "cpuCount" : 10,
+  "hostPageBytes" : 16384,
+  "linuxGuestGPUAcceleration" : "unverified; Metal availability does not prove Linux Vulkan support",
+  "memoryBytes" : 25769803776,
+  "metalComputePassed" : true,
+  "metalDevice" : "Apple M5",
+  "os" : "Version 27.0.1 (Build 26A434)",
+  "protonExecution" : "not tested",
+  "steamExecution" : "not tested",
+  "virtualizationSupported" : true
+}

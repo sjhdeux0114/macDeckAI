@@ -1,0 +1,9 @@
+Sources/MacDeck/ExternalLibrary.swift:13:33: warning: 'init(contentsOf:)' was deprecated in macOS 15: Use `init(contentsOf:encoding:)` instead [#DeprecatedDeclaration]
+11 |     var windowsLibraryPath: String { windowsPath + librarySubdirectory }
+12 |     var marker: URL { URL(fileURLWithPath: path).appendingPathComponent(".macdeck-library-" + id.uuidString) }
+13 |     var connected: Bool { (try? String(contentsOf: marker)) == id.uuidString }
+   |                                 `- warning: 'init(contentsOf:)' was deprecated in macOS 15: Use `init(contentsOf:encoding:)` instead [#DeprecatedDeclaration]
+14 |     var availableSpace: String {
+15 |         guard connected, let values = try? URL(fileURLWithPath: path).resourceValues(forKeys: [.volumeAvailableCapacityKey]), let bytes = values.volumeAvailableCapacity else { return "연결되지 않음" }
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>

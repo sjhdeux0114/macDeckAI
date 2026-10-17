@@ -1,0 +1,3 @@
+
+PASS: actual Windows cmd.exe wrote through D: into the mapped Unicode storage folder
+Isolated test data: /Users/sjhdeux/Documents/macdeck/.cache/external-storage-a7ec33fb8a7a475b9ac539d2dd9853cd

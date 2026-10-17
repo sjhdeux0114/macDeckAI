@@ -1,0 +1,20 @@
+[
+  {
+    "kCGWindowAlpha" : 1,
+    "kCGWindowBounds" : {
+      "Height" : 783,
+      "Width" : 1209,
+      "X" : 151,
+      "Y" : 85
+    },
+    "kCGWindowIsOnscreen" : true,
+    "kCGWindowLayer" : 0,
+    "kCGWindowMemoryUsage" : 2432,
+    "kCGWindowName" : "Brogue",
+    "kCGWindowNumber" : 4151,
+    "kCGWindowOwnerName" : "brogue.exe",
+    "kCGWindowOwnerPID" : 78237,
+    "kCGWindowSharingState" : 1,
+    "kCGWindowStoreType" : 1
+  }
+]

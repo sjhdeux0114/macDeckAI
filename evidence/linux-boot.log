@@ -1,0 +1,40 @@
+[    0.041706] hv_vmbus: registering driver hyperv_keyboard
+[    0.041837] rtc-pl031 20050000.pl031: registered as rtc0
+[    0.041854] rtc-pl031 20050000.pl031: setting system clock to 2026-10-17T13:29:29 UTC (1792243769)
+[    0.041980] NET: Registered PF_INET6 protocol family
+[    0.042164] Segment Routing with IPv6
+[    0.042190] In-situ OAM (IOAM) with IPv6
+[    0.043755] registered taskstats version 1
+[    0.043821] Loading compiled-in X.509 certificates
+[    0.084627] Freeing initrd memory: 9920K
+[    0.086178] Loaded X.509 cert 'alpinelinux.org: Alpine Linux kernel key: 87fa969a47f3e2a6aa35859eb932a17c95abcd82'
+[    0.086896] Demotion targets for Node 0: null
+[    0.086980] Key type .fscrypt registered
+[    0.087005] Key type fscrypt-provisioning registered
+[    0.088295] clk: Disabling unused clocks
+[    0.088318] PM: genpd: Disabling unused power domains
+[    0.088453] Freeing unused kernel memory: 2048K
+[    0.088486] Run /macdeck-init as init process
+[    0.095677] [drm] pci: virtio-gpu-pci detected at 0000:00:06.0
+[    0.095742] [drm] features: -virgl -edid -resource_blob -host_visible
+[    0.095743] [drm] features: -context_init
+[    0.095931] [drm] number of scanouts: 1
+[    0.095957] [drm] number of cap sets: 0
+[    0.096067] [drm] Initialized virtio_gpu 0.1.0 for 0000:00:06.0 on minor 0
+[    0.096516] Console: switching to colour frame buffer device 160x50
+[    0.096701] virtio-pci 0000:00:06.0: [drm] fb0: virtio_gpudrmfb frame buffer device
+MACDECK_KERNEL=Linux
+MACDECK_ARCH=aarch64
+MACDECK_RELEASE=6.18.52-0-virt
+MACDECK_PROC=mounted
+MACDECK_SYS=mounted
+MACDECK_PAGE=4 kB
+MACDECK_DRI_NODES=card0
+card0-Virtual-1
+renderD128
+version
+MACDECK_RENDER_NODE=present
+MACDECK_KGSL=absent
+MACDECK_DONE=597FC856-0445-44C0-842B-F54979E4DB73
+
+PASS: ARM64 Linux kernel and userland executed inside Apple's Virtualization framework. Steam/Proton/GPU acceleration remain untested.

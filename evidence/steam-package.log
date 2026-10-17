@@ -1,0 +1,27 @@
+SHA256 verified: wine-steam10.tar.xz
+SHA256 verified: wine.tar.xz
+SHA256 verified: dxmt.tar.gz
+SHA256 verified: brogue.zip
+Prepared bundled Metal runtime and Windows game
+/Users/sjhdeux/Documents/macdeck/dist/MacDeck.app: replacing existing signature
+Built /Users/sjhdeux/Documents/macdeck/dist/MacDeck.app
+PASS: new library starts empty
+PASS: library preserves identities, paths and literal arguments
+PASS: Windows arguments are passed directly without a shell
+PASS: each game receives its own Wine prefix
+PASS: DXMT builtin Metal path is selected
+PASS: SDL games use the Direct3D 11 path
+PASS: launch plan executes without evaluating injected shell syntax
+PASS: invalid Windows executable is rejected
+PASS: corrupt library is rejected without overwriting it
+PASS: corrupt library remains intact
+PASS: Steam install is detected in the dedicated prefix
+PASS: Steam launches Big Picture in its persistent prefix
+PASS: only fully installed Steam games are imported
+PASS: Steam games route through the client and share its prefix
+PASS: Steam library Windows paths map into the correct prefix
+PASS: Steam library paths cannot traverse outside their drive mapping
+PASS: VDF preserves escaped Windows paths
+PASS: VDF handles quotes and comments
+PASS: malformed VDF is rejected
+19 checks passed

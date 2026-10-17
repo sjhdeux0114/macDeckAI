@@ -1,0 +1,18 @@
+SHA256 verified: winecx.tar.xz
+SHA256 verified: wine.tar.xz
+SHA256 verified: dxmt.tar.gz
+SHA256 verified: brogue.zip
+Prepared bundled Metal runtime and Windows game
+/Users/sjhdeux/Documents/macdeck/dist/MacDeck.app: replacing existing signature
+Built /Users/sjhdeux/Documents/macdeck/dist/MacDeck.app
+PASS: new library starts empty
+PASS: library preserves identities, paths and literal arguments
+PASS: Windows arguments are passed directly without a shell
+PASS: each game receives its own Wine prefix
+PASS: DXMT builtin Metal path is selected
+PASS: SDL games use the Direct3D 11 path
+PASS: launch plan executes without evaluating injected shell syntax
+PASS: invalid Windows executable is rejected
+PASS: corrupt library is rejected without overwriting it
+PASS: corrupt library remains intact
+10 checks passed

@@ -1,0 +1,15 @@
+{
+  "compilation": "blocked",
+  "reason": "You have not agreed to the Xcode license agreements. Please run 'sudo xcodebuild -license' from within a Terminal window to review and agree to the Xcode and Apple SDKs license.",
+  "sdk": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk",
+  "frameworkInventory": {
+    "Virtualization": false,
+    "Hypervisor": false,
+    "Metal": true,
+    "GameController": true,
+    "VideoToolbox": true,
+    "Network": true
+  },
+  "deviceExecution": "not performed",
+  "limit": "Filesystem inventory only; no compilation or entitlement validation."
+}

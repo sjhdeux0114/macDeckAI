@@ -1,0 +1,13 @@
+.build/
+.cache/
+upstream/
+.DS_Store
+__pycache__/
+dist/
+
+# Sensitive or temporary authentication artifacts
+evidence/steam-setup/big-picture-login.png
+*.key
+*.token
+*.auth
+*.credential

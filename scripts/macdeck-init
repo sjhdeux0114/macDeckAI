@@ -1,0 +1,18 @@
+#!/bin/busybox sh
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+busybox mount -t proc proc /proc || exit 1
+busybox mount -t sysfs sysfs /sys || exit 1
+busybox mount -t devtmpfs devtmpfs /dev || exit 1
+busybox modprobe virtio_gpu
+echo "MACDECK_KERNEL=$(busybox uname -s)"
+echo "MACDECK_ARCH=$(busybox uname -m)"
+echo "MACDECK_RELEASE=$(busybox uname -r)"
+echo MACDECK_PROC=mounted
+echo MACDECK_SYS=mounted
+busybox awk '/KernelPageSize/ {print "MACDECK_PAGE=" $2 " " $3; exit}' /proc/self/smaps
+echo "MACDECK_DRI_NODES=$(busybox ls /sys/class/drm 2>/dev/null)"
+echo "MACDECK_RENDER_NODE=$(test -e /dev/dri/renderD128 && echo present || echo absent)"
+echo "MACDECK_KGSL=$(test -e /dev/kgsl-3d0 && echo present || echo absent)"
+nonce=$(busybox sed -n 's/.*macdeck_nonce=\([^ ]*\).*/\1/p' /proc/cmdline)
+echo "MACDECK_DONE=$nonce"
+while :; do busybox sleep 60; done
