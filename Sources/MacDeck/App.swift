@@ -121,16 +121,28 @@ struct DeckView: View {
                 Text(model.graphicsBackend == .dxmt ? "DXMT → Metal (DirectX 11)" : "VKD3D · MoltenVK → Metal (DirectX 12)").font(.system(size: 10)).foregroundStyle(.secondary)
             }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
             Button("데이터 폴더 열기", action: model.revealData).buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 12)
-            Text("MacDeck · Preview 0.5.1").font(.system(size: 10)).foregroundStyle(.tertiary).padding(.top, 6)
+            Text("MacDeck · Preview 0.5.2").font(.system(size: 10)).foregroundStyle(.tertiary).padding(.top, 6)
         }.padding(20).background(Color(red: 0.075, green: 0.085, blue: 0.1))
     }
 
     func nav(_ title: String, icon: String, page: String) -> some View {
         Button { model.page = page } label: {
-            HStack(spacing: 12) { Image(systemName: icon).frame(width: 18); Text(title).fontWeight(.medium); Spacer() }
-                .padding(.horizontal, 14).padding(.vertical, 13)
-                .foregroundStyle(model.page == page ? accent : Color.secondary)
-                .background(model.page == page ? accent.opacity(0.1) : .clear, in: RoundedRectangle(cornerRadius: 9))
+            HStack(spacing: 12) {
+                Image(systemName: icon).frame(width: 18)
+                Text(title).fontWeight(.medium)
+                Spacer()
+                if page == "runtime" && model.availableUpdateCount > 0 {
+                    Text("\(model.availableUpdateCount)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(accent, in: Capsule())
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 13)
+            .foregroundStyle(model.page == page ? accent : Color.secondary)
+            .background(model.page == page ? accent.opacity(0.1) : .clear, in: RoundedRectangle(cornerRadius: 9))
         }.buttonStyle(.plain)
     }
 
@@ -241,6 +253,66 @@ struct DeckView: View {
                 }
                 .pickerStyle(.radioGroup)
                 Text("선택한 모드는 Steam 및 모든 Windows 게임에 전역으로 적용됩니다. 변경 시 런타임의 DXGI 브리지와 오버라이드 설정이 전환되며, 실행 중인 Steam이 있으면 자동으로 재시작해 새 모드를 반영합니다.").font(.callout).foregroundStyle(.secondary)
+            }
+            panel("런타임 구성요소 자동 업데이트 (MoltenVK · DXMT · Wine)", icon: "arrow.triangle.2.circlepath.circle.fill") {
+                Toggle("앱 시작 시 MoltenVK · DXMT · Wine 업데이트 자동 확인 및 설치", isOn: Binding(get: { model.autoUpdateRuntime }, set: model.setAutoUpdateRuntime))
+                if !model.updateBannerMessage.isEmpty {
+                    Text(model.updateBannerMessage).font(.callout).foregroundStyle(accent)
+                }
+                ForEach(model.runtimeComponents) { item in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(item.kind.title).font(.subheadline.weight(.semibold))
+                            Spacer()
+                            if item.checking || item.updating {
+                                ProgressView().controlSize(.small)
+                            }
+                            Text(item.statusMessage.isEmpty ? "설치됨: \(item.installedVersion)" : item.statusMessage)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(item.updateAvailable ? .orange : (item.error != nil ? .red : accent))
+                        }
+                        Text(item.kind.summary).font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: 12) {
+                            Text("현재 버전: \(item.installedVersion)").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                            if let latest = item.latestVersion {
+                                Text("최신 릴리스: \(latest)").font(.system(size: 11, design: .monospaced)).foregroundStyle(item.updateAvailable ? .orange : .secondary)
+                            }
+                            Spacer()
+                            if item.updateAvailable {
+                                Button(item.updating ? "설치 중…" : "\(item.latestVersion ?? "") 업데이트") {
+                                    model.updateComponent(item.kind)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                                .disabled(model.updatingComponents || model.checkingUpdates)
+                            }
+                        }
+                        if let err = item.error {
+                            Text(err).font(.caption2).foregroundStyle(.orange)
+                        }
+                    }
+                    .padding(12)
+                    .background(.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 9))
+                }
+                HStack(spacing: 12) {
+                    Button(model.checkingUpdates ? "확인 중…" : "업데이트 확인") {
+                        model.checkRuntimeUpdates(autoInstall: false)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(model.checkingUpdates || model.updatingComponents)
+
+                    Button(model.updatingComponents ? "업데이트 적용 중…" : "지금 자동 업데이트 실행") {
+                        if model.availableUpdateCount > 0 {
+                            model.updateAllAvailableComponents()
+                        } else {
+                            model.checkRuntimeUpdates(autoInstall: true)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .foregroundStyle(.black)
+                    .disabled(model.checkingUpdates || model.updatingComponents)
+                }
+                Text("GitHub 공식 릴리스(KhronosGroup/MoltenVK, 3Shain/dxmt, Sikarugir-App/Engines)에서 최신 버전을 확인하고 SHA-256 무결성 검증 후 런타임에 자동 반영합니다.").font(.caption).foregroundStyle(.secondary)
             }
             panel("Wine 런타임", icon: "shippingbox") {
                 Text(model.runtime.path ?? "연결된 Wine이 없습니다").font(.system(size: 11, design: .monospaced)).textSelection(.enabled)

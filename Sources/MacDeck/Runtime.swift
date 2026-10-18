@@ -90,6 +90,10 @@ final class DeckModel: ObservableObject {
     @Published var downloadingSteam = false
     @Published var steamProgress = ""
     @Published var managingStorage = false
+    @Published var runtimeComponents: [RuntimeComponentStatus] = []
+    @Published var checkingUpdates = false
+    @Published var updatingComponents = false
+    @Published var updateBannerMessage = ""
     let disk: LibraryDisk
     private var writable = true
     private var processes: [UUID: Process] = [:]
@@ -120,6 +124,7 @@ final class DeckModel: ObservableObject {
         selected = library.games.first?.id
         runtime = Runtime.inspect(custom: library.winePath)
         DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: library.games)
+        reloadRuntimeComponents()
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -136,6 +141,8 @@ final class DeckModel: ObservableObject {
     var game: Game? { library.games.first { $0.id == selected } }
     var filtered: [Game] { library.games.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) } }
     var graphicsBackend: GraphicsBackend { library.graphicsBackend ?? .dxmt }
+    var autoUpdateRuntime: Bool { library.autoUpdateRuntime ?? true }
+    var availableUpdateCount: Int { runtimeComponents.filter(\.updateAvailable).count }
 
     private func commit(_ changed: LibraryData) throws {
         guard writable else { throw DeckError.message("읽기 오류가 있는 라이브러리는 덮어쓰지 않습니다. 데이터 폴더에서 library.json을 확인해 주세요.") }
@@ -499,8 +506,14 @@ final class DeckModel: ObservableObject {
         didStart = true
         let winePath = runtime.path ?? Runtime.inspect(custom: library.winePath).path
         DirectX12Support.applyGlobal(mode: graphicsBackend, wine: winePath, games: library.games)
+        reloadRuntimeComponents()
         reconnectExternalLibraries(steamRunning: false)
         refreshSteamGames(silent: true)
+        if autoUpdateRuntime {
+            checkRuntimeUpdates(autoInstall: true)
+        } else {
+            checkRuntimeUpdates(autoInstall: false)
+        }
         if CommandLine.arguments.contains("--setup-steam") { installSteam() }
         else if CommandLine.arguments.contains("--steam") || (steamInstalled && (library.startSteamOnLaunch ?? true)) { launchSteam() }
     }
@@ -508,6 +521,180 @@ final class DeckModel: ObservableObject {
     func setSteamAutostart(_ enabled: Bool) {
         do { var data = library; data.startSteamOnLaunch = enabled; try commit(data) }
         catch { message = error.localizedDescription }
+    }
+
+    func setAutoUpdateRuntime(_ enabled: Bool) {
+        do {
+            var data = library
+            data.autoUpdateRuntime = enabled
+            try commit(data)
+            if enabled {
+                checkRuntimeUpdates(autoInstall: true)
+            }
+        } catch { message = error.localizedDescription }
+    }
+
+    func reloadRuntimeComponents() {
+        let winePath = runtime.path ?? Runtime.inspect(custom: library.winePath).path
+        let root = DirectX12Support.runtimeRoot(forWine: winePath)
+        runtimeComponents = RuntimeComponentKind.allCases.map { kind in
+            let existing = runtimeComponents.first(where: { $0.kind == kind })
+            let installed = RuntimeUpdater.detectInstalledVersion(for: kind, runtimeRoot: root)
+            return RuntimeComponentStatus(
+                kind: kind,
+                installedVersion: installed,
+                latestVersion: existing?.latestVersion,
+                asset: existing?.asset,
+                checking: existing?.checking ?? false,
+                updating: existing?.updating ?? false,
+                statusMessage: existing?.statusMessage ?? "",
+                error: existing?.error
+            )
+        }
+    }
+
+    func checkRuntimeUpdates(autoInstall: Bool = false) {
+        guard !checkingUpdates && !updatingComponents else { return }
+        reloadRuntimeComponents()
+        checkingUpdates = true
+        updateBannerMessage = "MoltenVK · DXMT · Wine 최신 릴리스를 확인하고 있습니다…"
+        for index in runtimeComponents.indices {
+            runtimeComponents[index].checking = true
+            runtimeComponents[index].error = nil
+        }
+        Task {
+            defer { checkingUpdates = false }
+            for kind in RuntimeComponentKind.allCases {
+                do {
+                    let result = try await RuntimeUpdater.fetchRelease(for: kind)
+                    if let idx = runtimeComponents.firstIndex(where: { $0.kind == kind }) {
+                        runtimeComponents[idx].checking = false
+                        runtimeComponents[idx].latestVersion = result.version
+                        runtimeComponents[idx].asset = result.asset
+                        runtimeComponents[idx].statusMessage = runtimeComponents[idx].updateAvailable
+                            ? "업데이트 가능 (\(runtimeComponents[idx].installedVersion) → \(result.version))"
+                            : "최신 버전 (\(runtimeComponents[idx].installedVersion))"
+                    }
+                } catch {
+                    if let idx = runtimeComponents.firstIndex(where: { $0.kind == kind }) {
+                        runtimeComponents[idx].checking = false
+                        runtimeComponents[idx].error = error.localizedDescription
+                        runtimeComponents[idx].statusMessage = "확인 실패"
+                    }
+                }
+            }
+            let count = availableUpdateCount
+            if count > 0 {
+                updateBannerMessage = "업데이트 가능한 런타임 구성요소가 \(count)개 있습니다."
+                if autoInstall {
+                    updateAllAvailableComponents()
+                }
+            } else {
+                updateBannerMessage = "모든 런타임 구성요소(MoltenVK · DXMT · Wine)가 최신 버전입니다."
+            }
+        }
+    }
+
+    func updateComponent(_ kind: RuntimeComponentKind) {
+        guard !updatingComponents else { return }
+        guard let idx = runtimeComponents.firstIndex(where: { $0.kind == kind }),
+              let latest = runtimeComponents[idx].latestVersion,
+              let asset = runtimeComponents[idx].asset else { return }
+        updatingComponents = true
+        runtimeComponents[idx].updating = true
+        runtimeComponents[idx].error = nil
+        runtimeComponents[idx].statusMessage = "\(latest) 다운로드 및 설치 중…"
+        updateBannerMessage = "\(kind.title) (\(latest)) 업데이트를 적용하고 있습니다…"
+        Task {
+            defer { updatingComponents = false }
+            do {
+                let currentWine = runtime.path ?? Runtime.inspect(custom: library.winePath).path
+                let ensured = try RuntimeUpdater.ensureWritableRuntime(currentWinePath: currentWine, disk: disk)
+                if let newWinePath = ensured.updatedWinePath, newWinePath != library.winePath {
+                    var data = library
+                    data.winePath = newWinePath
+                    try? commit(data)
+                    runtime = Runtime.inspect(custom: newWinePath)
+                }
+                try await RuntimeUpdater.downloadAndInstall(
+                    kind: kind,
+                    version: latest,
+                    asset: asset,
+                    runtimeRoot: ensured.runtimeRoot,
+                    graphicsMode: graphicsBackend
+                )
+                reloadRuntimeComponents()
+                if let newIdx = runtimeComponents.firstIndex(where: { $0.kind == kind }) {
+                    runtimeComponents[newIdx].updating = false
+                    runtimeComponents[newIdx].statusMessage = "업데이트 완료 (\(latest))"
+                }
+                updateBannerMessage = "\(kind.title)을(를) \(latest) 버전으로 업데이트했습니다."
+            } catch {
+                if let newIdx = runtimeComponents.firstIndex(where: { $0.kind == kind }) {
+                    runtimeComponents[newIdx].updating = false
+                    runtimeComponents[newIdx].error = error.localizedDescription
+                    runtimeComponents[newIdx].statusMessage = "업데이트 실패"
+                }
+                updateBannerMessage = "\(kind.title) 업데이트 실패: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func updateAllAvailableComponents() {
+        guard !updatingComponents else { return }
+        let targets = runtimeComponents.filter { $0.updateAvailable && $0.latestVersion != nil && $0.asset != nil }
+        guard !targets.isEmpty else { return }
+        updatingComponents = true
+        updateBannerMessage = "런타임 구성요소 \(targets.count)개를 자동으로 업데이트하고 있습니다…"
+        Task {
+            defer { updatingComponents = false }
+            var updatedNames: [String] = []
+            do {
+                let currentWine = runtime.path ?? Runtime.inspect(custom: library.winePath).path
+                let ensured = try RuntimeUpdater.ensureWritableRuntime(currentWinePath: currentWine, disk: disk)
+                if let newWinePath = ensured.updatedWinePath, newWinePath != library.winePath {
+                    var data = library
+                    data.winePath = newWinePath
+                    try? commit(data)
+                    runtime = Runtime.inspect(custom: newWinePath)
+                }
+                for item in targets {
+                    guard let latest = item.latestVersion, let asset = item.asset else { continue }
+                    if let idx = runtimeComponents.firstIndex(where: { $0.kind == item.kind }) {
+                        runtimeComponents[idx].updating = true
+                        runtimeComponents[idx].error = nil
+                        runtimeComponents[idx].statusMessage = "\(latest) 다운로드 및 설치 중…"
+                    }
+                    do {
+                        try await RuntimeUpdater.downloadAndInstall(
+                            kind: item.kind,
+                            version: latest,
+                            asset: asset,
+                            runtimeRoot: ensured.runtimeRoot,
+                            graphicsMode: graphicsBackend
+                        )
+                        updatedNames.append("\(item.kind.title) (\(latest))")
+                        reloadRuntimeComponents()
+                        if let idx = runtimeComponents.firstIndex(where: { $0.kind == item.kind }) {
+                            runtimeComponents[idx].updating = false
+                            runtimeComponents[idx].statusMessage = "업데이트 완료 (\(latest))"
+                        }
+                    } catch {
+                        if let idx = runtimeComponents.firstIndex(where: { $0.kind == item.kind }) {
+                            runtimeComponents[idx].updating = false
+                            runtimeComponents[idx].error = error.localizedDescription
+                            runtimeComponents[idx].statusMessage = "업데이트 실패"
+                        }
+                    }
+                }
+            } catch {
+                updateBannerMessage = "런타임 업데이트 준비 실패: \(error.localizedDescription)"
+                return
+            }
+            if !updatedNames.isEmpty {
+                updateBannerMessage = "자동 업데이트 완료: " + updatedNames.joined(separator: ", ")
+            }
+        }
     }
 
     func setGraphicsBackend(_ mode: GraphicsBackend) {

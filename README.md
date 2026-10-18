@@ -24,8 +24,9 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
 2. **Apple Metal 하드웨어 가속 및 전역 DX11 Mode / DX12 Mode 선택**
    - **WineSikarugir 10.0 (x86_64, Rosetta 2)** 기반 호환성 레이어.
    - **전역 그래픽 모드 전환 (모든 게임 공통)**: 상단 툴바, 런타임 설정, 또는 Steam 탭에서 **DX11 Mode**와 **DX12 Mode**를 선택하면 런타임의 DXGI 브리지와 DLL 오버라이드가 전역으로 전환되며, 실행 중인 Steam도 새 모드로 자동 재시작됩니다.
-   - **DX11 Mode (DXMT 0.80 · 기본 권장)**: Direct3D 10/11 호출을 Apple Metal로 직접 변환하며, `d3d12`/`d3d12core`를 비활성화하여 멀티 API 게임을 안정적인 DirectX 11 경로로 유도합니다.
-   - **DX12 Mode (VKD3D 1.14 + MoltenVK 1.4.1 · 실험적)**: Wine D3D12 DXGI 브리지와 MoltenVK(`libvulkan.1.dylib`)를 통해 Direct3D 12를 Apple Metal 3로 가속합니다.
+   - **DX11 Mode (DXMT 0.80+ · 기본 권장)**: Direct3D 10/11 호출을 Apple Metal로 직접 변환하며, `d3d12`/`d3d12core`를 비활성화하여 멀티 API 게임을 안정적인 DirectX 11 경로로 유도합니다.
+   - **DX12 Mode (VKD3D 1.14 + MoltenVK 1.4.2+ · 실험적)**: Wine D3D12 DXGI 브리지와 MoltenVK(`libvulkan.1.dylib`)를 통해 Direct3D 12를 Apple Metal 3로 가속합니다.
+   - **런타임 구성요소 자동 업데이트 (`RuntimeUpdater`)**: `런타임` 설정에서 **MoltenVK**, **DXMT**, **Wine Engine**의 공식 GitHub Releases 최신 버전을 확인하고 SHA-256 무결성 및 `x86_64` 아키텍처 검증 후 원클릭 또는 앱 시작 시 자동으로 업데이트합니다.
    - **macOS Game Mode (`Game Mode: On`) & Apple Metal HUD**: `MacDeck.app` 및 내장 `wine` 실행 파일의 `Info.plist`에 `public.app-category.games`, `LSSupportsGameMode`, `GCSupportsGameMode`를 설정하여 전체화면 게임 시 macOS 게임 모드와 Metal HUD를 지원합니다.
 
 3. **외장 SSD/HDD 게임 라이브러리 지원 및 시작 시 자동 연결**
@@ -57,7 +58,7 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
 
 ### 🎲 3D 게임: 전역 DX11 Mode(DXMT) & DX12 Mode(VKD3D/MoltenVK) 구축 및 집중 테스트 진행 중
 - **현재 상태:**
-  - **DX11 Mode (DXMT → Metal · 기본 권장)** 및 **DX12 Mode (VKD3D 1.14 → winevulkan → MoltenVK 1.4.1 → Metal 3 · 실험적)** 전역 전환 파이프라인이 구축되어 있습니다.
+  - **DX11 Mode (DXMT → Metal · 기본 권장)** 및 **DX12 Mode (VKD3D 1.14 → winevulkan → MoltenVK → Metal 3 · 실험적)** 전역 전환 파이프라인이 구축되어 있습니다.
   - 외장 NVMe 드라이브(`E:\SteamLibrary`)에 설치된 **Resident Evil 3 (`re3.exe`)** 실행 시 Apple M5 Metal 3 전체화면(`2704x1756`, `38.45 FPS`) 스왑체인 렌더링을 확인했으며, 안정적인 플레이를 위해 전역 기본값을 **DX11 Mode**로 제공합니다.
 - **향후 계획:**
   - 3D 게임은 복잡한 셰이더 연산, 엔진별 DirectX 11/12 특성, 안티치트(Anti-Cheat) 솔루션, 런타임 종속성(Visual C++ 재배포 패키지 등), 장시간 플레이 안정성 등 다양한 변수가 존재하므로 **앞으로도 다양한 3D 타이틀을 대상으로 테스트를 집중적으로 많이 수행해봐야 하는 단계**입니다.
@@ -65,7 +66,7 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
 
 ### ☁️ Steam 클라이언트 및 외장 스토리지 연동
 - Valve 공식 Windows `SteamSetup.exe`를 통한 설치, 최신 클라이언트 업데이트, Big Picture 로그인 및 외장 NVMe SSD(`E:\SteamLibrary`) 게임 다운로드·설치 검증 완료.
-- 앱 재실행 시 설정된 외장 게임 설치 폴더 자동 재연결 및 총 **69개 자체 검증 테스트(`--self-test`) 통과**.
+- 앱 재실행 시 설정된 외장 게임 설치 폴더 자동 재연결 및 총 **74개 자체 검증 테스트(`--self-test`) 통과**.
 
 ---
 
@@ -141,6 +142,7 @@ macDeckAI/
 ├── Sources/
 │   ├── MacDeck/               # MacDeck 메인 애플리케이션 (SwiftUI/AppKit)
 │   │   ├── App.swift          # 앱 엔트리포인트 및 UI 뷰
+│   │   ├── RuntimeUpdater.swift # MoltenVK / DXMT / Wine Engine 자동 업데이트
 │   │   ├── Library.swift      # 게임 라이브러리 및 실행 플랜
 │   │   ├── Runtime.swift      # Wine/Steam 프로세스 제어
 │   │   ├── SteamClient.swift  # Steam 연동 및 VDF 파서
@@ -173,6 +175,14 @@ macDeckAI/
 ## 📋 변경 내역 (Changelog)
 
 > 세부적인 작업·검증·디버깅 누적 기록은 [`work.md`](work.md)에서 확인할 수 있습니다.
+
+### v0.5.2 (2026-10-18)
+- **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 확인 및 자동 업데이트 (`RuntimeUpdater.swift`)**:
+  - `런타임` 설정 탭에 **런타임 구성요소 자동 업데이트** 패널을 추가하여 **MoltenVK**(`KhronosGroup/MoltenVK`, `v1.4.1` → `v1.4.2`), **DXMT**(`3Shain/dxmt`, `v0.80`), **Wine Engine**(`Sikarugir-App/Engines`, `v10.0_8`)의 공식 GitHub Releases 최신 버전을 실시간으로 확인하고 업데이트할 수 있습니다.
+  - **앱 시작 시 자동 확인 및 설치** 토글(기본 켜짐), 개별 업데이트 버튼, "업데이트 확인" 및 "지금 자동 업데이트 실행" 버튼을 제공합니다.
+  - 다운로드된 패키지의 **SHA-256 무결성 검증**, Mach-O `x86_64` 아키텍처 슬라이스 검증, 기존 파일 백업 후 원자적 교체, 심볼릭 링크(`libvulkan.1.dylib`) 및 호환성 패치(`SetRotation(IDENTITY)`, `dxgi-dxmt`/`dxgi-d3d12`, `wine` Game Mode `Info.plist`) 유지, ad-hoc 코드 재서명을 자동으로 수행합니다.
+- **자체 검증 테스트 확대**:
+  - `RuntimeUpdater` 버전 비교, GitHub Releases JSON 파싱, SHA-256 검증 및 로컬 아카이브 설치 테스트를 포함해 **74개 자체 검증 테스트(`--self-test`) 전수 통과**.
 
 ### v0.5.1 (2026-10-18)
 - **전역 DX11 Mode / DX12 Mode 전환 설정 지원**:

@@ -202,6 +202,7 @@ struct LibraryData: Codable {
     var startSteamOnLaunch: Bool? = nil
     var externalLibraries: [ExternalLibrary]? = nil
     var graphicsBackend: GraphicsBackend? = nil
+    var autoUpdateRuntime: Bool? = nil
 }
 
 enum DeckError: LocalizedError {

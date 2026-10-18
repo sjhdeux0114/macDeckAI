@@ -5,17 +5,17 @@
 ## 현재 상태 — 2026-10-18
 
 - 프로젝트: `/Users/sjhdeux/Documents/macdeck`
-- 현재 앱: **MacDeck 0.5.1**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
+- 현재 앱: **MacDeck 0.5.2**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
 - 빌드 결과: `dist/MacDeck.app`
 - 설치된 앱: `/Users/sjhdeux/Applications/MacDeck.app`
 - 실제 호스트: Apple M5, 메모리 24 GiB, macOS 27.0.1. 최소 배포 대상 macOS 13은 빌드 설정이며 다른 기기에서 검증한 것은 아니다.
-- 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **macOS Game Mode(`Game Mode: On`) 활성화 지원**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
-- 최종 자체 검사 **69개 통과**, 앱 빌드·서명 확인 성공.
+- 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 공식 GitHub Releases 확인 및 자동 업데이트(`RuntimeUpdater`)**, **macOS Game Mode(`Game Mode: On`) 활성화 지원**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
+- 최종 자체 검사 **74개 통과**, 앱 빌드·서명 확인 성공.
 - 실제 Windows Brogue CE 던전 렌더링 및 **M5 Metal HUD 확인 성공**.
 - 실제 Windows Steam 로그인 완료 및 외장 NVMe 드라이브(`E:\SteamLibrary`)에 Steam 게임 4종(Resident Evil 3, Balatro, Halls of Torment, No Results Found) 다운로드·설치 확인 성공.
-- **Direct3D 12 3D 게임(Resident Evil 3, `re3.exe`) 실행 및 Apple M5 Metal 3(VKD3D 1.14 → winevulkan → MoltenVK 1.4.1) 전체화면(`2704x1756`, `38.45 FPS`) 렌더링 확인 성공** (단, Wine 10 내장 VKD3D 1.14의 RE Engine DX12 한계로 진행 중 크래시가 발생하므로 기본 전역 모드를 **DX11 Mode**로 설정하고 설정에서 전환 가능하게 구성).
+- **Direct3D 12 3D 게임(Resident Evil 3, `re3.exe`) 실행 및 Apple M5 Metal 3(VKD3D 1.14 → winevulkan → MoltenVK) 전체화면(`2704x1756`, `38.45 FPS`) 렌더링 확인 성공** (기본 전역 모드는 **DX11 Mode**이며 설정에서 전환 가능).
 - Bluetooth DualShock 4를 Apple GameController 및 Wine과 같은 SDL2에서 인식하고 실제 버튼/축 변화 확인. Windows/Steam/게임 내부 조작은 아직 별도 검증 필요.
-- v0.5.1: 모든 게임에 공통 적용되는 **전역 DX11 Mode / DX12 Mode 설정**(상단 툴바, 런타임 설정, Steam 설정에서 즉시 전환 및 Steam 자동 재시작 반영), `MacDeck.app` 및 내장 `wine` 바이너리 `__TEXT,__info_plist`의 **macOS Game Mode(`public.app-category.games`, `LSSupportsGameMode`, `GCSupportsGameMode`) 활성화 패치**, 앱 시작 시 외장 설치 폴더 자동 연결 제공.
+- v0.5.2: `런타임` 설정 탭에 **MoltenVK (`KhronosGroup/MoltenVK`) · DXMT (`3Shain/dxmt`) · Wine Engine (`Sikarugir-App/Engines`)** 최신 릴리스 확인 및 **자동 업데이트** 기능(`RuntimeUpdater.swift`) 추가. 앱 시작 시 자동 확인 및 SHA-256 무결성 검증·아키텍처(`x86_64`) 슬라이스 검증·백업 후 원자적 교체·ad-hoc 재서명 지원.
 - 작업 폴더를 Git 저장소로 초기화하고 원격 저장소(`https://github.com/sjhdeux0114/macDeckAI.git`, branch `main`)로 커밋 및 푸시 완료.
 
 ## 사용자 목표 및 이미 받은 승인
@@ -36,19 +36,21 @@
 
 ```text
 MacDeck.app — SwiftUI/AppKit arm64 UI
-  → WineSikarugir 10.0 revision 8 — x86_64, Rosetta
+  ├─ RuntimeUpdater — GitHub Releases (MoltenVK / DXMT / Wine) 확인 · SHA-256 검증 · 자동 업데이트
+  → WineSikarugir 10.0 revision 8+ — x86_64, Rosetta
   → Windows Steam / Windows 게임
-  ├─ Direct3D 10/11 → DXMT 0.80 + IDENTITY rotation 수정 → Apple Metal
-  └─ Direct3D 12    → Wine VKD3D 1.14 + Wine DXGI Bridge + MoltenVK 1.4.1 → Apple Metal
+  ├─ Direct3D 10/11 → DXMT 0.80+ + IDENTITY rotation 수정 → Apple Metal
+  └─ Direct3D 12    → Wine VKD3D 1.14 + Wine DXGI Bridge + MoltenVK 1.4.1/1.4.2+ → Apple Metal
 ```
 
-- `Sources/MacDeck/App.swift`: 네이티브 UI, Steam 중심 시작 화면, 라이브러리, 실행 환경, 그래픽 백엔드 선택기, 외장 설치 폴더 패널.
-- `Sources/MacDeck/Library.swift`: Codable 데이터, 게임 가져오기, prefix 준비, D3D12 자동 감지 및 `dxgi.dll` 브리지 배포(`DirectX12Support`), 셸을 거치지 않는 실행 계획과 환경.
-- `Sources/MacDeck/Runtime.swift`: 프로세스·로그·라이브러리 관리, Steam 설치/실행/자동 시작/게임 동기화, 앱 시작 시 외장 폴더 자동 연결(`reconnectExternalLibraries`).
+- `Sources/MacDeck/App.swift`: 네이티브 UI, Steam 중심 시작 화면, 라이브러리, 실행 환경, 그래픽 백엔드 선택기, 런타임 자동 업데이트 패널, 외장 설치 폴더 패널.
+- `Sources/MacDeck/RuntimeUpdater.swift`: MoltenVK / DXMT / Wine Engine 버전 감지, GitHub Releases API 조회, SHA-256 검증, `x86_64` 슬라이스 확인, 호환성 패치(`SetRotation`, `dxgi-dxmt`/`dxgi-d3d12`, `wine` Game Mode plist) 보존 설치.
+- `Sources/MacDeck/Library.swift`: Codable 데이터, 게임 가져오기, prefix 준비, 전역 DX11/DX12 모드 및 `dxgi.dll` 브리지 전환(`DirectX12Support`), 셸을 거치지 않는 실행 계획과 환경.
+- `Sources/MacDeck/Runtime.swift`: 프로세스·로그·라이브러리 관리, 런타임 업데이트 상태/자동 설치 관리, Steam 설치/실행/자동 시작/게임 동기화, 앱 시작 시 외장 폴더 자동 연결(`reconnectExternalLibraries`).
 - `Sources/MacDeck/SteamClient.swift`: VDF 파서, Steam 전용 prefix, Big Picture 인수, 설치 게임 탐색, Windows 경로 변환, 설치 프로세스 대기.
 - `Sources/MacDeck/ExternalLibrary.swift`: 선택 폴더 식별 파일, 고정 드라이브 문자, 비루트(`E:\SteamLibrary`) 매핑 정규화, 연결 여부와 남은 용량.
 - `Sources/MacDeck/SteamStorage.swift`: Steam `libraryfolders.vdf` 등록/해제, 드라이브 심볼릭 링크 자동 복구(`autoConnectAll`), 인식 상태 확인.
-- `Sources/MacDeck/SelfTests.swift`: 격리된 임시 폴더 기반 자체 검사 68개.
+- `Sources/MacDeck/SelfTests.swift`: 격리된 임시 폴더 기반 자체 검사 74개.
 - `Sources/MacDeckProbe/main.swift`: 초기 Metal 계산·Linux VM 진단 도구.
 - `scripts/prepare-metal-runtime.py`: 고정 SHA-256 배포물로 앱 런타임(DXMT + VKD3D/MoltenVK `libvulkan.1.dylib` + D3D12용 Wine `dxgi.dll`)과 게임 구성.
 - `scripts/build-mac-app.sh`: Swift CLI 컴파일, Info.plist v0.5.0 생성, ad-hoc 서명.
@@ -328,4 +330,31 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
 - 실제 실행한 검증과 결과:
   - `bash scripts/package-mac-app.sh` 실행 → **69 checks passed** (`evidence/v051-global-mode-tests.log`), `codesign --verify --strict dist/MacDeck.app` 통과.
   - `Runtime/bin/wine` 내장 `__TEXT,__info_plist` 및 `dist/MacDeck.app/Contents/Info.plist`에 `public.app-category.games`, `LSSupportsGameMode`, `GCSupportsGameMode` 반영 및 서명 검증 완료.
+
+### 2026-10-18 — 런타임 구성요소(MoltenVK · DXMT · Wine Engine) 확인 및 자동 업데이트 구현 (v0.5.2)
+
+- 사용자 요청: "MacDeck App설정에서 MoltenVK , wine 등의 업데이트 파일을 확인하고 자동 업데이트 할 수있는 기능이 필요해"
+- 설계 및 상위 저장소 현황 분석:
+  - **MoltenVK** (`https://api.github.com/repos/KhronosGroup/MoltenVK/releases/latest`): 현재 번들된 `WS12WineSikarugir10.0_8` 내장 버전은 `v1.4.1`이며, 공식 최신 릴리스는 **`v1.4.2`** (`MoltenVK-macos.tar`, `sha256:f95765a6229cb7b915990a2890ce12ebe36a730b021545d3d52ae69ce4c4024e`, Metal argument buffer device loss 및 imported `MTLBuffer` residency 개선 포함).
+  - **DXMT** (`https://api.github.com/repos/3Shain/dxmt/releases/latest`): `dxmt-v*-builtin.tar.gz` 에셋 추적 (`v0.80`).
+  - **Wine Engine** (`https://api.github.com/repos/Sikarugir-App/Engines/releases/latest`): `WS12WineSikarugir10.0_*.tar.xz` 에셋 중 `Battle.Net` 전용 빌드를 제외한 최신 버전 추적 (`v10.0_8`).
+- 변경 파일 및 내용:
+  - `Sources/MacDeck/RuntimeUpdater.swift` (신규):
+    - `RuntimeComponentKind` (`.moltenvk`, `.dxmt`, `.wine`), `RuntimeReleaseAsset`, `RuntimeComponentStatus`, `RuntimeVersionStore`, `RuntimeUpdater` 구현.
+    - 현재 설치된 런타임의 바이너리 문자열(`libMoltenVK.dylib` → `v1.4.1`, `d3d11.dll` → `v0.80`), `Runtime/version` 파일(`v10.0_8`), 및 `Runtime/runtime-versions.json`을 통해 설치 버전을 정확히 감지.
+    - GitHub Releases API JSON 파싱(`tag_name`, 에셋 URL, `digest: sha256:...`), 다운로드 후 SHA-256 무결성 검증, 임시 디렉터리 압축 해제(`tar` / `unzip`).
+    - **MoltenVK 업데이트**: 압축 해제된 패키지에서 `MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib`를 찾아 `x86_64` Mach-O 아키텍처 슬라이스 포함 여부(`hasX86_64Slice`)를 검증한 뒤 기존 파일을 백업하고 원자적으로 교체, `libvulkan.1.dylib` / `libvulkan.dylib` 심볼릭 링크 유지 및 ad-hoc 재서명.
+    - **DXMT 업데이트**: `x86_64-unix`, `x86_64-windows`, `i386-windows`의 `winemetal.so`, `winemetal.dll`, `d3d11.dll`, `dxgi.dll`, `d3d10core.dll`을 업데이트하면서 `SetRotation(IDENTITY)` 인라인 패치 및 `dxgi-dxmt` 보존본과 현재 전역 그래픽 모드(`DX11 Mode` / `DX12 Mode`)를 유지.
+    - **Wine Engine 업데이트**: `wswine.bundle` 동기화 시 기존 `libMoltenVK.dylib`와 DXMT DLL들을 보존하고, 새 Wine `dxgi.dll`을 `dxgi-d3d12`에 갱신하며, `bin/wine`의 내장 `__TEXT,__info_plist`에 macOS Game Mode 패치(`patchWineGameModePlist`) 적용 후 ad-hoc 재서명.
+  - `Sources/MacDeck/Library.swift`:
+    - `LibraryData`에 `autoUpdateRuntime: Bool?` 설정 추가 (기본값 `true`).
+  - `Sources/MacDeck/Runtime.swift`:
+    - `DeckModel`에 `runtimeComponents`, `checkingUpdates`, `updatingComponents`, `updateBannerMessage`, `checkRuntimeUpdates(autoInstall:)`, `updateComponent(_:)`, `updateAllAvailableComponents()` 추가.
+    - 앱 시작(`start()`) 시 `autoUpdateRuntime`이 켜져 있으면 백그라운드에서 자동으로 최신 버전을 확인하고 새 버전(예: MoltenVK `v1.4.2`)을 자동 설치하며, 업데이트 시 실행 중인 Steam을 안전하게 재시작.
+  - `Sources/MacDeck/App.swift`:
+    - `런타임` 설정 화면에 **"런타임 구성요소 자동 업데이트 (MoltenVK · DXMT · Wine)"** 패널 추가 (자동 업데이트 토글, 구성요소별 현재 버전/최신 버전/상태 배지, 개별 업데이트 버튼, "업데이트 확인" 및 "지금 자동 업데이트 실행" 버튼, 사이드바 업데이트 가능 개수 배지).
+  - `Sources/MacDeck/SelfTests.swift`, `scripts/build-mac-app.sh`:
+    - 앱 버전을 `0.5.2` (`CFBundleVersion = 8`)로 갱신하고, `RuntimeUpdater` 버전 비교·GitHub Release JSON 파싱(MoltenVK/DXMT/Wine)·SHA-256 무결성 검증·Mach-O `x86_64` 검증 및 로컬 아카이브 설치 테스트 5종을 추가하여 총 **74개 자체 검사**로 확장.
+- 실제 실행한 검증과 결과:
+  - `bash scripts/build-mac-app.sh && dist/MacDeck.app/Contents/MacOS/MacDeck --self-test && codesign --verify --strict dist/MacDeck.app` 실행 → **74 checks passed** (`evidence/v052-runtime-updater-tests.log`), 서명 검증 통과.
 
