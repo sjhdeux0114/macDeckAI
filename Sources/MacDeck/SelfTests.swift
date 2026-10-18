@@ -34,13 +34,15 @@ enum SelfTests {
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("winedbg.exe=d") == true
                   && plan.environment["WINEDLLOVERRIDES"]?.contains("UnityCrashHandler64.exe=d") == true
                   && plan.environment["WINEDLLOVERRIDES"]?.contains("CrashReportClient.exe=d") == true
+                  && plan.environment["WINEDLLOVERRIDES"]?.contains("CryCrashHandler.exe=d") == true
+                  && plan.environment["WINEDLLOVERRIDES"]?.contains("OriginCrashReporter.exe=d") == true
                   && plan.environment["WINEDLLOVERRIDES"]?.contains("easyanticheat_x64=d") == true
                   && plan.environment["WINEDLLOVERRIDES"]?.contains("dinput8=b") == true
                   && plan.environment["WINEDLLOVERRIDES"]?.contains("nvapi,nvapi64,nvngx=_nvngx=d") == true
                   && plan.environment["WINEDLLOVERRIDES"]?.contains("d3d9=b") == true
-                  && plan.environment["WINEDLLOVERRIDES"]?.contains("d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b") == true, "default global DX11 Mode keeps builtin D3D12/Vulkan/D3D9, Unity/Unreal/EAC/NVAPI crash mitigations, and disables winedbg popups")
+                  && plan.environment["WINEDLLOVERRIDES"]?.contains("d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b") == true, "default global DX11 Mode keeps builtin D3D12/Vulkan/D3D9, Unity/Unreal/CryEngine/EAC/NVAPI crash mitigations, and disables winedbg popups")
         try check(plan.environment["WINEMSYNC"] == "1" && plan.environment["WINEESYNC"] == "1" && plan.environment["WINE_LARGE_ADDRESS_AWARE"] == "1", "Windows launch plan enables Mach-message MSync, ESync, and large address awareness")
-        try check(plan.environment["WINE_D3D_CONFIG"] == "renderer=vulkan,csmt=3", "WineD3D configures multithreaded Vulkan/Metal renderer for Direct3D 9 titles")
+        try check(plan.environment["WINE_D3D_CONFIG"] == nil, "WineD3D avoids experimental Vulkan overrides to ensure rock-solid 32-bit Direct3D 9 stability")
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("xaudio2_7,xaudio2_8,xaudio2_9") == true && plan.environment["WINEDLLOVERRIDES"]?.contains("dsound=b") == true, "Windows launch plan overrides XAudio2 and DirectSound to Wine builtins")
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("mfplat,mfreadwrite,mf,mfmediaengine,winegstreamer=b;quartz,amstream=b") == true, "Windows launch plan overrides Media Foundation and DirectShow to Wine builtins")
         try check(plan.environment["DXMT_CONFIG"]?.contains("ignoreMapFlagNoWait=True") == true && plan.environment["DXMT_CONFIG"]?.contains("handleAltTab=True") == true, "DXMT frame pacing and Alt-Tab mitigations are configured")

@@ -245,6 +245,7 @@ enum DirectX12Support {
         let common = "winemenubuilder.exe=d;winedbg.exe=d;mscoree,mshtml=;"
             + "UnityCrashHandler32.exe=d;UnityCrashHandler64.exe=d;"
             + "CrashReportClient.exe=d;CrashReportClientEditor.exe=d;"
+            + "OriginCrashReporter.exe=d;EACrashReporter.exe=d;CryCrashHandler.exe=d;"
             + "easyanticheat_x64=d;EasyAntiCheat=d;"
             + "xinput1_1,xinput1_2,xinput1_3,xinput1_4,xinput9_1_0=b;"
             + "dinput=b;dinput8=b;"
@@ -377,7 +378,6 @@ struct LaunchPlan {
             environment["DXMT_LOG_LEVEL"] = "info"
             environment["DXMT_LOG_PATH"] = disk.logs.path
             environment["DXMT_CONFIG"] = "d3d11.ignoreMapFlagNoWait=True;dxgi.handleAltTab=True;d3d11.maxTessFactor=64"
-            environment["WINE_D3D_CONFIG"] = "renderer=vulkan,csmt=3"
             let hudEnabled = loaded?.showMetalHUD ?? true
             environment["MTL_HUD_ENABLED"] = hudEnabled ? "1" : "0"
             environment["SDL_RENDER_DRIVER"] = "direct3d11"

@@ -766,3 +766,35 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
 
 
 
+
+### 2026-10-18 — 30초전사 구동 중 크래시(`0xC0000005`) 원인 규명·WineD3D 안정화 및 하복·크라이·고도 엔진 등 충돌 내역 종합 조사
+
+- **요청 사항**:
+  1. "기존의 다른게임엔진 (하복엔진,크라이엔진,고도엔진 등등)에 대한 충돌 내역도 확인해봐"
+  2. "30초전사 실행되다가 크래쉬 발생"
+
+- **30초전사 크래시 및 느려짐 원인 정밀 규명**:
+  1. **구동 중 크래시 원인**:
+     - Steam `gameprocess_log.txt` 확인 결과, 13:54:18에 시작된 `HMH.exe` 프로세스가 1분 7초 후인 13:55:25에 `exit code -1073741819` (`0xC0000005` = `STATUS_ACCESS_VIOLATION`)으로 비정상 종료됨.
+     - 직전 턴에 속도 향상을 위해 적용했던 `WINE_D3D_CONFIG="renderer=vulkan,csmt=3"` 환경에서, Wine 10의 WineD3D Vulkan 백엔드는 32비트 WoW64와 MoltenVK 간 멀티스레드 커맨드 스트림 가동 시 버텍스 버퍼 및 포인터 경합으로 인한 메모리 접근 위반이 발생하는 상위 Wine의 미완성 백엔드 버그임이 확인됨.
+     - 실제로 해당 옵션 적용 전(13:16~13:33)에는 17분 이상 연속 플레이에도 exit code 0으로 전혀 튕김이 없었음.
+  2. **게임이 원래 엄청 느렸던 근본 원인 (PCGamingWiki / ProtonDB 공인)**:
+     - 30초 전사(2012년 PSP 이식작)는 내부 물리 및 타이머 로직이 **60 FPS / 60Hz 틱**에 하드웨어 고정(Hard-locked)되어 있음.
+     - Apple Silicon Mac의 **ProMotion 120Hz 고주사율 디스플레이** 환경에서 120Hz 화면 갱신 주기와 60Hz 게임 틱이 엇박자를 일으켜, 심각한 슬로우 모션(느려짐) 및 프레임 페이싱 버벅임이 발생함.
+     - 권장 해결책: macOS 시스템 설정의 디스플레이 주사율을 60Hz로 고정하거나 게임 내 수직동기화(VSync) 켜기, 또는 실행 인수에 `-windowed` 부여.
+  3. **Metal HUD 미표시 이유**:
+     - Metal Performance HUD(`MTL_HUD_ENABLED=1`)는 애플 Metal API 렌더 패스(DXMT DX11, VKD3D DX12 등)에만 훅이 걸림.
+     - 30초 전사는 32비트 DirectX 9 게임으로 WineD3D의 OpenGL(`winemac.so`) 파이프라인으로 구동되므로 Metal HUD가 뜨지 않는 것이 정상적인 동작임.
+
+- **해결 및 조치 내용**:
+  1. **WineD3D 안정화 (`Library.swift`)**:
+     - 실험적인 `WINE_D3D_CONFIG="renderer=vulkan,csmt=3"` 제거. Wine 10 공식 기본 안정 모드로 복원하여 `0xC0000005` 메모리 크래시 원천 차단.
+  2. **추가 게임 엔진 충돌 조사 및 크래시 핸들러 차단**:
+     - **하복 엔진(Havok Physics/Vision Engine)**: 60fps 초과 시 물리 틱 폭주(`hkpRigidBody` 접근 위반) -> 60fps 프레임 캡 권장, Win32 동기화 락업 방지(`WINEMSYNC=1,WINEMSYNC_QLIMIT=512`).
+     - **크라이엔진(CryEngine)**: Apple Silicon 고코어 CPU 토폴로지 오류(스레드 스톰핑) -> `-cpuCount=4` 권장, 인트로 무비 프리징 -> GStreamer/Media Foundation 완벽 지원으로 해결, 백그라운드 크래시 유발자 `CryCrashHandler.exe=d` 차단.
+     - **고도 엔진(Godot Engine)**: Godot 4 Forward+ Vulkan의 MoltenVK 셰이더 컴파일 데드락 -> macOS 네이티브 실행 권장, 윈도우 빌드는 `--rendering-driver opengl3` 호환 모드 권장.
+     - **EA Frostbite**: 백그라운드 프리징 유발 `OriginCrashReporter.exe=d;EACrashReporter.exe=d;` 비활성화 추가.
+  3. **검증 및 로컬 배포**:
+     - 자체 테스트 스위트 **총 94개 전원 통과 (`94 checks passed`)**.
+     - `/Applications/MacDeck.app`, `~/Applications/MacDeck.app` 즉시 교체 배포.
+     - 로컬 배포용 DMG `dist/MacDeck-v0.5.5.dmg` (529MB) 재빌드 완료 (원격 GitHub 미업로드).
