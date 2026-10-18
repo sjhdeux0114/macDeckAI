@@ -57,7 +57,12 @@ final class SessionDiagnostics {
             kind: kind, started: started, appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development",
             gpu: MTLCreateSystemDefaultDevice()?.name, operatingSystem: ProcessInfo.processInfo.operatingSystemVersionString, wine: game.kind == .windows ? plan.executable.path : nil,
             executable: game.path, arguments: steam ? [] : Self.safeArguments(game.arguments), workingDirectory: plan.workingDirectory.path,
-            environment: plan.environment.filter { ["WINEPREFIX", "WINEDLLOVERRIDES", "WINEDEBUG", "DXMT_LOG_LEVEL", "MTL_HUD_ENABLED", "SDL_RENDER_DRIVER", "MVK_CONFIG_RESUME_LOST_DEVICE"].contains($0.key) },
+            environment: plan.environment.filter { [
+                "WINEPREFIX", "WINEDLLOVERRIDES", "WINEDEBUG", "DXMT_LOG_LEVEL", "MTL_HUD_ENABLED", "SDL_RENDER_DRIVER",
+                "MVK_CONFIG_RESUME_LOST_DEVICE", "WINEMSYNC", "WINEESYNC", "WINEMSYNC_QLIMIT", "WINE_LARGE_ADDRESS_AWARE",
+                "DXMT_CONFIG", "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS",
+                "VKD3D_FEATURE_LEVEL", "VKD3D_CONFIG"
+            ].contains($0.key) },
             status: "prepared", notes: [])
         if game.steamAppID != nil {
             record.relatedSteamSessionID = Self.entries(disk: disk).first { $0.record.kind == "steam-client" && $0.record.environment["WINEPREFIX"] == plan.environment["WINEPREFIX"] }?.record.sessionID

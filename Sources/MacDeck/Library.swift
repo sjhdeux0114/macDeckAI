@@ -242,11 +242,15 @@ enum DirectX12Support {
     }
 
     static func dllOverrides(for mode: GraphicsBackend) -> String {
+        let common = "winemenubuilder.exe=d;winedbg.exe=d;mscoree,mshtml=;"
+            + "xinput1_1,xinput1_2,xinput1_3,xinput1_4,xinput9_1_0=b;"
+            + "xaudio2_0,xaudio2_1,xaudio2_2,xaudio2_3,xaudio2_4,xaudio2_5,xaudio2_6,xaudio2_7,xaudio2_8,xaudio2_9,x3daudio1_0,x3daudio1_1,x3daudio1_2,x3daudio1_3,x3daudio1_4,x3daudio1_5,x3daudio1_6,x3daudio1_7=b;dsound=b;"
+            + "mfplat,mfreadwrite,mf,mfmediaengine,winegstreamer=b;quartz,amstream=b;"
         switch mode {
         case .dxmt:
-            return "winemenubuilder.exe=d;winedbg.exe=d;mscoree,mshtml=;d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b;xinput1_1,xinput1_2,xinput1_3,xinput1_4,xinput9_1_0=b"
+            return common + "d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b"
         case .d3d12:
-            return "winemenubuilder.exe=d;winedbg.exe=d;mscoree,mshtml=;dxgi,d3d12,d3d12core,vulkan-1,winevulkan,d3d11,d3d10core,winemetal=b;xinput1_1,xinput1_2,xinput1_3,xinput1_4,xinput9_1_0=b"
+            return common + "dxgi,d3d12,d3d12core,vulkan-1,winevulkan,d3d11,d3d10core,winemetal=b"
         }
     }
 }
@@ -350,17 +354,27 @@ struct LaunchPlan {
             if FileManager.default.fileExists(atPath: media.appendingPathComponent("lib/libgstreamer-1.0.0.dylib").path) {
                 environment["DYLD_FALLBACK_LIBRARY_PATH", default: ""] += ":" + media.appendingPathComponent("lib").path
                 environment["GST_PLUGIN_SYSTEM_PATH_1_0"] = media.appendingPathComponent("lib/gstreamer-1.0").path
+                environment["GST_PLUGIN_PATH_1_0"] = ""
                 environment["GST_PLUGIN_SCANNER_1_0"] = media.appendingPathComponent("libexec/gstreamer-1.0/gst-plugin-scanner").path
                 environment["GST_REGISTRY_1_0"] = disk.logs.appendingPathComponent("gst-registry-x86_64.bin").path
             }
+            environment["WINEMSYNC"] = "1"
+            environment["WINEESYNC"] = "1"
+            environment["WINEMSYNC_QLIMIT"] = "512"
+            environment["WINE_LARGE_ADDRESS_AWARE"] = "1"
             environment["DXMT_LOG_LEVEL"] = "info"
             environment["DXMT_LOG_PATH"] = disk.logs.path
+            environment["DXMT_CONFIG"] = "d3d11.ignoreMapFlagNoWait=True;dxgi.handleAltTab=True;d3d11.maxTessFactor=64"
             environment["MTL_HUD_ENABLED"] = (loaded?.showMetalHUD ?? false) ? "1" : "0"
             environment["SDL_RENDER_DRIVER"] = "direct3d11"
             if mode == .d3d12 {
                 // Surface device loss to the game. Continuing after a GPU timeout
                 // left RE3 submitting invalid work and hanging on a black screen.
                 environment["MVK_CONFIG_RESUME_LOST_DEVICE"] = "0"
+                environment["MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS"] = "1"
+                environment["MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS"] = "3"
+                environment["VKD3D_FEATURE_LEVEL"] = "12_1"
+                environment["VKD3D_CONFIG"] = "no_upload_hlist"
             }
         } else if game.kind == .executable {
             executable = URL(fileURLWithPath: game.path)

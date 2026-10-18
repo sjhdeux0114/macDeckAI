@@ -24,7 +24,10 @@ if not expanded.exists():
     subprocess.run(['pkgutil', '--expand-full', str(archive), str(expanded)], check=True)
 runtime = Path(sys.argv[1]) if len(sys.argv) > 1 else root / 'dist/MacDeck.app/Contents/Resources/Runtime'
 media = runtime / 'Media'
-for package in ['base-system-1.0', 'base-crypto', 'gstreamer-1.0-core', 'gstreamer-1.0-playback', 'gstreamer-1.0-codecs', 'gstreamer-1.0-codecs-restricted', 'gstreamer-1.0-effects', 'gstreamer-1.0-libav']:
+for package in ['base-system-1.0', 'base-crypto', 'gstreamer-1.0-core', 'gstreamer-1.0-playback',
+            'gstreamer-1.0-codecs', 'gstreamer-1.0-codecs-restricted', 'gstreamer-1.0-effects',
+            'gstreamer-1.0-libav', 'gstreamer-1.0-system', 'gstreamer-1.0-codecs-gpl',
+            'gstreamer-1.0-codecs-gpl-restricted', 'gstreamer-1.0-encoding']:
     payload = expanded / f'{package}-{version}-universal.pkg/Payload'
     if not payload.is_dir():
         raise RuntimeError(f'Missing package payload: {package}')

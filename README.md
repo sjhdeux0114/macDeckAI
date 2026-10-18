@@ -317,5 +317,21 @@ macDeckAI/
 ### 2026-10-18 — 사용자 확인 결과
 - **DMC5: GS/TS 수정 후보 적용 후 긴 렉이 없어졌다는 사용자 확인을 받았습니다.** 장시간·전체 장면 안정성은 아직 미검증입니다.
 - RE3 DX11 non-RT 구동, Steam Big Picture 정상화도 사용자 보고로 확인했습니다. HUD는 기본 끔입니다.
-- 앱 자체 검사82개, 미디어 필수 요소/처리 체인14항목, 실제 Metal GS·TS 경계/복수 작업 검사를 통과했습니다. Game Mode On, DX12 안정성 및 수정본마다 반복되는 외장 볼륨 권한은 여전히 별도 과제입니다.
+- 앱 자체 검사88개, 미디어 필수 요소/처리 체인23항목, 실제 Metal GS·TS 경계/복수 작업 검사를 통과했습니다. Game Mode On, DX12 안정성 및 수정본마다 반복되는 외장 볼륨 권한은 여전히 별도 과제입니다.
 - Runtime binary patches are experimental and version-locked. See [runtime patch notes](docs/runtime-patches.md) for reproducibility and rollback.
+
+### 2026-10-18 — 타 플랫폼(Proton/CrossOver/Whisky/DXMT) 종합 최적화 (v0.5.5)
+- **멀티스레드 동기화 최적화 (MSync / ESync)**:
+  - macOS Mach-message 및 공유 메모리 기반 고속 동기화인 `WINEMSYNC=1`, `WINEESYNC=1`, `WINEMSYNC_QLIMIT=512`를 활성화하여 wineserver 소켓 IPC 병목에 의한 CPU 렉과 스레드 기아 현상을 해소.
+  - 32비트/구형 게임의 2GB 가상 메모리 초과 크래시를 방지하는 `WINE_LARGE_ADDRESS_AWARE=1` 활성화.
+- **오디오 끊김 및 컷씬 무음 방지 (XAudio2 / DirectSound)**:
+  - RE Engine 및 Unreal Engine 게임들이 번들하는 Windows용 불완전 DLL 로드를 방지하고 Wine 내장 FAudio/CoreAudio를 강제 적용하도록 `xaudio2_0`~`xaudio2_9`, `x3daudio1_0`~`x3daudio1_7`, `dsound`를 `WINEDLLOVERRIDES`에 내장(`b`)으로 등록.
+- **동영상 컷씬 하드웨어 가속 및 코덱 보강 (Media Foundation / GStreamer)**:
+  - Apple Silicon VideoToolbox 하드웨어 가속 디코더(`vtdec`, `vtdec_hw`), Dolby Digital AC-3(`a52dec`), DTS(`dtsdec`), MP4(`qtdemux`), MKV(`matroskademux`) 등 GStreamer 확장 패키지 번들링.
+  - 호스트 GStreamer 플러그인 충돌을 차단하는 격리 환경변수(`GST_PLUGIN_PATH_1_0=""`) 및 `mfplat`, `mfreadwrite`, `quartz` 내장 오버라이드 등록.
+  - 미디어 런타임 검사 스크립트 23개 항목(`verify-media-runtime.py`) 전원 통과.
+- **렌더링 프레임 페이싱 및 크래시 방지 (DXMT & MoltenVK)**:
+  - DX11 (DXMT): `d3d11.ignoreMapFlagNoWait=True` (비동기 Map 크래시 방지), `dxgi.handleAltTab=True` (전체화면 전환 프리징 방지), `d3d11.maxTessFactor=64` (테셀레이션 폭주 방지) 기본 적용.
+  - DX12 (MoltenVK + VKD3D): `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1` (드로우콜 오버헤드 감소), `MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS=3` (커맨드 지연 완화), `VKD3D_FEATURE_LEVEL=12_1`, `VKD3D_CONFIG=no_upload_hlist` 적용.
+- 자체 검증 테스트 총 **88개 통과** 및 strict 코드 서명 검증 완료.
+

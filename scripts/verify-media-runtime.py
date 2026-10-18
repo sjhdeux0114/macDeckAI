@@ -9,7 +9,8 @@ import tempfile
 root = Path(__file__).resolve().parent.parent
 media = Path(sys.argv[1]) if len(sys.argv) > 1 else root / 'dist/MacDeck.app/Contents/Resources/Runtime/Media'
 required = ['decodebin', 'asfdemux', 'avdec_wmv2', 'avdec_wmv3', 'avdec_wmav2',
-            'deinterlace', 'videoconvert', 'videoflip', 'audioconvert', 'audioresample', 'appsink', 'appsrc']
+            'deinterlace', 'videoconvert', 'videoflip', 'audioconvert', 'audioresample', 'appsink', 'appsrc',
+            'vtdec', 'a52dec', 'dtsdec', 'qtdemux', 'matroskademux', 'wavparse', 'avdec_h264', 'avdec_aac', 'avdec_mp3']
 with tempfile.TemporaryDirectory(prefix='macdeck-media-') as temp:
     env = os.environ.copy()
     env.update(GST_REGISTRY_1_0=str(Path(temp) / 'registry.bin'),

@@ -5,12 +5,12 @@
 ## 현재 상태 — 2026-10-18
 
 - 프로젝트: `/Users/sjhdeux/Documents/macdeck`
-- 현재 앱: **MacDeck 0.5.4**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
+- 현재 앱: **MacDeck 0.5.5**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
 - 빌드 결과: `dist/MacDeck.app`
 - 설치된 앱: `/Users/sjhdeux/Applications/MacDeck.app`
 - 실제 호스트: Apple M5, 메모리 24 GiB, macOS 27.0.1. 최소 배포 대상 macOS 13은 빌드 설정이며 다른 기기에서 검증한 것은 아니다.
-- 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 공식 GitHub Releases 확인 및 자동 업데이트(`RuntimeUpdater`)**, **macOS Game Mode 지원 plist 반영(실제 On은 전체화면에서 별도 검증 필요)**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
-- 최종 자체 검사 **82개 통과**, 앱 빌드·서명 확인 성공.
+- 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **CrossOver/Proton/Whisky 호환 플랫폼 패치(Mach-message MSync·ESync 멀티스레드 동기화, XAudio2/X3DAudio/DirectSound 내장 오버라이드, Apple VideoToolbox 하드웨어 가속 vtdec 및 AC3/DTS/AAC 코덱, DXMT ignoreMapFlagNoWait/handleAltTab 프레임 페이싱, MoltenVK Argument Buffers/커맨드 프리필)**, **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 공식 GitHub Releases 확인 및 자동 업데이트(`RuntimeUpdater`)**, **macOS Game Mode 지원 plist 반영(실제 On은 전체화면에서 별도 검증 필요)**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
+- 최종 자체 검사 **88개 통과**, 미디어 런타임 검사 **23개 항목 통과**, 앱 빌드·서명 확인 성공.
 - 실제 Windows Brogue CE 던전 렌더링 및 **M5 Metal HUD 확인 성공**.
 - RE3 DX11 non-RT: 영상 의존성 보완 후 사용자 구동 성공 보고. DMC5: GS/TS 수정 후보 적용 후 사용자 긴 렉 해소 보고. 두 게임 모두 장시간 안정성은 별도 검증 필요.
 - 실제 Windows Steam 로그인 완료 및 외장 NVMe 드라이브(`E:\SteamLibrary`)에 Steam 게임 4종(Resident Evil 3, Balatro, Halls of Torment, No Results Found) 다운로드·설치 확인 성공.
@@ -18,7 +18,8 @@
 - Bluetooth DualShock 4를 Apple GameController 및 Wine과 같은 SDL2에서 인식하고 실제 버튼/축 변화 확인. Windows/Steam/게임 내부 조작은 아직 별도 검증 필요.
 - v0.5.2: `런타임` 설정 탭에 **MoltenVK (`KhronosGroup/MoltenVK`) · DXMT (`3Shain/dxmt`) · Wine Engine (`Sikarugir-App/Engines`)** 최신 릴리스 확인 및 **자동 업데이트** 기능(`RuntimeUpdater.swift`) 추가. 앱 시작 시 자동 확인 및 SHA-256 무결성 검증·아키텍처(`x86_64`) 슬라이스 검증·백업 후 원자적 교체·ad-hoc 재서명 지원.
 - v0.5.3: `steamwebhelper.exe` 시작 직후 `0x80000003` (`libcef.dll+0x59ef905`, Chromium `DelayLoadFailureHook`) 예외 및 `winedbg` 모달/콘솔 창이 반복 발생하던 문제를 근본 해결. Wine prefix 내부 `drive_c/windows/{system32,syswow64}/dxgi.dll` 동기화(`DirectX12Support.syncPrefix`), CEF Delay-Load 호환 `d3d12,d3d12core,vulkan-1,winevulkan=b` 오버라이드 유지, `winedbg.exe=d` 및 `AeDebug` 자동 복구, Steam 기동 중 런타임 덮어쓰기 경합 제거 적용 후 Steam Big Picture(`BrowserReady` 및 `SP BPM_uid0`) 무오류 정상 기동 검증 완료.
-- 작업 폴더를 Git 저장소로 초기화하고 원격 저장소(`https://github.com/sjhdeux0114/macDeckAI.git`, branch `main`)로 커밋 및 푸시 완료.
+- v0.5.5: Proton / CrossOver / Whisky / Apple GPTK / DXMT 커뮤니티의 유사 플랫폼 수정내역 및 최적화 설정을 분석·적용. 게임 중 CPU 병목/스레드 경합으로 인한 렉 해소를 위해 Mach-message 기반 `WINEMSYNC=1` 및 `WINEESYNC=1`, 32비트 주소 확장(`WINE_LARGE_ADDRESS_AWARE=1`) 활성화; 컷씬 음성 끊김 및 무음 방지를 위해 `xaudio2_*`, `x3daudio1_*`, `dsound` 내장 오버라이드 지정; 동영상 끊김 및 음성 싱크 밀림 해결을 위해 Apple VideoToolbox 하드웨어 가속 디코더(`vtdec`, `vtdec_hw`) 및 AC-3(`a52dec`), DTS(`dtsdec`), MP4(`qtdemux`), MKV(`matroskademux`) 등 GStreamer 확장 패키지 번들링 및 `mfplat`, `mfreadwrite`, `quartz` 내장 오버라이드 적용; DX11 DXMT 맵 플래그/Alt-Tab 크래시 방지(`DXMT_CONFIG`), DX12 MoltenVK 아규먼트 버퍼 및 커맨드 프리필 최적화 적용.
+- 작업 폴더를 Git 저장소로 관리하고 원격 저장소(`https://github.com/sjhdeux0114/macDeckAI.git`, branch `main`)로 지속 동기화.
 
 ## 사용자 목표 및 이미 받은 승인
 
@@ -527,3 +528,66 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
 - 사용자: "렉은 없어졌어". 실험적 DXMT GS/TS 보완 후 동일 구간의 긴 렉이 사라졌다는 사용자 확인을 받음. 모든 장면·장시간·다른 게임에 대한 완전한 안정성 보장은 아님.
 - 현재까지 RE3 영상 소스 의존성/한글 글꼴, Game Mode 지원 키, 렌더러 진단, Steam Big Picture GPU 경로, HUD 기본 끔, DMC5 GS/TS 후보를 누적 정리. Game Mode On과 DX12 안정성, 업데이트 간 외장 권한 유지 문제는 미해결.
 - 사용자 요청에 따라 코드/문서/재현 가능한 검사 및 선별된 비민감 결과를 커밋·푸시. Steam raw 로그, 메모리 덤프, 인증 화면/파일, 원본 프로세스 샘플 및 로컬 런타임 바이너리는 업로드 제외. 최종 앱 빌드 검사82개, 미디어14항목, 실제 Metal GS/TS 검사 통과 이력을 구분해 기록.
+
+### 2026-10-18 — 타 플랫폼(Proton/CrossOver/Whisky/DXMT) 동영상·사운드·렉 패치 및 최적화 종합 적용 (v0.5.5)
+
+- **요청 사항**:
+  - 새로 수정된 `work.md` 확인 후, *Devil May Cry 5*나 *Resident Evil* 시리즈 외 다른 Windows 게임들에서도 발생할 수 있는 렉(stutter), 동영상 컷씬 문제, 사운드 왜곡/무음 현상에 대응.
+  - Proton, Proton-GE, CrossOver, Whisky, Apple Game Porting Toolkit(GPTK), DXMT, MoltenVK, VKD3D-Proton 등 유사 Windows 게임 호환 레이어들의 핵심 수정내역과 커뮤니티 패치사항을 분석하여 MacDeck 전역에 적용.
+
+- **유사 플랫폼 분석 및 문제 원인 식별**:
+  1. **멀티스레드 동기화 병목 (CPU 렉 및 마이크로 스터터링)**:
+     - 기본 Wine은 윈도우 스레드 동기화 객체(Event, Mutex, Semaphore 등)를 다룰 때마다 `wineserver` 소켓 IPC를 경유하여 심한 오버헤드와 스레드 기아(Starvation)가 발생함.
+     - CodeWeavers(CrossOver Mac)와 Apple GPTK는 macOS Mach-message 및 공유 메모리(shm) 기반의 고속 동기화인 **MSync(`WINEMSYNC=1`)**와 **ESync(`WINEESYNC=1`)**를 표준 적용하여 CPU 렉을 제거함. Wine Sikarugir 바이너리 문자열 검사 결과 `WINEMSYNC` 및 `WINEESYNC` 네이티브 구현체가 내장되어 있음을 확인.
+  2. **오디오 끊김 / 컷씬 대사 무음 (XAudio2 / DirectSound)**:
+     - Capcom RE Engine(DMC5, RE2/3/7/Village) 및 Unreal Engine 4/5 게임들은 XAudio 2.7~2.9 및 X3DAudio를 사용하며, 게임 배포 폴더에 자체 Windows용 `xaudio2_7.dll` 등을 번들하는 경우가 많음.
+     - Wine이 게임 폴더의 네이티브 DLL을 로드하면 초기화에 실패하거나 소리가 나지 않고, CoreAudio 드라이버 채널 매핑(`ca_channel_layout_to_channel_mask`)과의 마찰로 찌직거리는 잡음이 발생함. Proton과 CrossOver처럼 Wine 내장(builtin) XAudio2/FAudio 및 DirectSound로 오버라이드 고정이 필수적임.
+  3. **동영상 컷씬 끊김 / 흑화 / 싱크 밀림 (Media Foundation / GStreamer)**:
+     - 기존 MacDeck의 GStreamer에는 소프트웨어 디코더 일부만 포함되어 1080p/4K 60fps 고화질 컷씬 재생 시 CPU 과부하와 싱크 밀림이 발생할 위험이 있었음.
+     - 공식 GStreamer universal 패키지 중 `gstreamer-1.0-system`에 macOS Apple Silicon 하드웨어 가속 VideoToolbox 디코더인 **`vtdec`** 및 **`vtdec_hw`**(H.264 / HEVC)가 포함되어 있음을 확인.
+     - 또한 컷씬 동영상에 광범위하게 쓰이는 Dolby Digital AC-3 5.1/스테레오 디코더인 **`a52dec`**와 DTS 디코더인 **`dtsdec`**(`gstreamer-1.0-codecs-gpl`), MP4/QuickTime 파서 **`qtdemux`**, MKV 파서 **`matroskademux`**가 번들되어야 영상-음성 디코딩 파이프라인이 완전해짐.
+  4. **DXMT / MoltenVK 렌더링 프레임 페이싱 및 크래시 방지**:
+     - DX11(DXMT): 일부 게임(소닉, DMC5 등)이 `D3D11_MAP_FLAG_DO_NOT_WAIT` 플래그로 Map 호출 시 GPU 작업 미완료 예외를 제대로 처리하지 못해 크래시/스터터가 발생하는 것을 방지하는 `d3d11.ignoreMapFlagNoWait=True`, 전체화면 전환 프리징을 방지하는 `dxgi.handleAltTab=True`, 비정상 테셀레이션 폭주를 제한하는 `d3d11.maxTessFactor=64` 옵션을 `DXMT_CONFIG`로 기본 부여.
+     - DX12(MoltenVK + VKD3D): Apple Silicon Metal 3 최적화를 위해 Metal Argument Buffers(`MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1`) 및 커맨드 버퍼 사전 채움(`MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS=3`), VKD3D 기능 레벨 12.1(`VKD3D_FEATURE_LEVEL=12_1`), 디스크립터 최적화(`VKD3D_CONFIG=no_upload_hlist`) 적용.
+
+- **구현 및 변경 파일**:
+  1. `scripts/prepare-gstreamer.py`:
+     - 패키지 목록에 `gstreamer-1.0-system`, `gstreamer-1.0-codecs-gpl`, `gstreamer-1.0-codecs-gpl-restricted`, `gstreamer-1.0-encoding` 추가.
+     - `dist/MacDeck.app` 및 `/Users/sjhdeux/Applications/MacDeck.app`의 `Runtime/Media`에 자동 추출·반영.
+  2. `scripts/verify-media-runtime.py`:
+     - 검증 대상을 12종에서 21종으로 확장: `vtdec`(Apple VideoToolbox H.264/HEVC 하드웨어 가속), `a52dec`(AC-3 오디오), `dtsdec`(DTS 오디오), `qtdemux`(MP4/MOV), `matroskademux`(MKV), `wavparse`, `avdec_h264`, `avdec_aac`, `avdec_mp3` 추가 검사.
+  3. `Sources/MacDeck/Library.swift`:
+     - `DirectX12Support.dllOverrides`:
+       - 오디오: `xaudio2_0`~`xaudio2_9`, `x3daudio1_0`~`x3daudio1_7`, `dsound=b` 추가.
+       - 미디어: `mfplat,mfreadwrite,mf,mfmediaengine,winegstreamer=b;quartz,amstream=b` 추가.
+     - `LaunchPlan.make`:
+       - `environment["WINEMSYNC"] = "1"`
+       - `environment["WINEESYNC"] = "1"`
+       - `environment["WINEMSYNC_QLIMIT"] = "512"`
+       - `environment["WINE_LARGE_ADDRESS_AWARE"] = "1"`
+       - `environment["GST_PLUGIN_PATH_1_0"] = ""` (호스트 GStreamer 플러그인 오염 격리)
+       - `environment["DXMT_CONFIG"] = "d3d11.ignoreMapFlagNoWait=True;dxgi.handleAltTab=True;d3d11.maxTessFactor=64"`
+       - DX12: `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1`, `MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS=3`, `VKD3D_FEATURE_LEVEL=12_1`, `VKD3D_CONFIG=no_upload_hlist`.
+  4. `Sources/MacDeck/Diagnostics.swift`:
+     - 세션 진단 기록 환경변수 화이트리스트에 `WINEMSYNC`, `WINEESYNC`, `WINEMSYNC_QLIMIT`, `WINE_LARGE_ADDRESS_AWARE`, `DXMT_CONFIG`, `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS`, `MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS`, `VKD3D_FEATURE_LEVEL`, `VKD3D_CONFIG` 등록 (민감 정보 제외).
+  5. `Sources/MacDeck/SelfTests.swift`:
+     - MSync/ESync/LargeAddressAwareness 설정 검증, XAudio2/DirectSound 오버라이드 검증, Media Foundation/DirectShow 오버라이드 검증, DXMT 프레임 페이싱/Alt-Tab 설정 검증, DX12 MoltenVK Argument Buffers/Prefill 및 VKD3D 12.1 검증 추가.
+
+- **실제 실행한 검증과 결과**:
+  1. `python3 scripts/verify-media-runtime.py`:
+     - 필수 팩토리 21종(`decodebin`, `asfdemux`, `avdec_wmv2/3`, `avdec_wmav2`, `deinterlace`, `videoconvert`, `videoflip`, `audioconvert`, `audioresample`, `appsink`, `appsrc`, `vtdec`, `a52dec`, `dtsdec`, `qtdemux`, `matroskademux`, `wavparse`, `avdec_h264`, `avdec_aac`, `avdec_mp3`) 모두 `PASS`.
+     - 합성 ASF 디코드 + Wine 후처리 체인 `PASS`.
+     - 오디오 변환 체인 `PASS`. 총 23개 항목 정상 검증 완료.
+  2. `bash scripts/build-mac-app.sh`:
+     - MacDeck 컴파일 성공, `Info.plist` 생성 및 ad-hoc 코드 서명 성공.
+  3. `dist/MacDeck.app/Contents/MacOS/MacDeck --self-test`:
+     - **88개 자체 검증 테스트 전원 통과 (`PASS`)**.
+  4. `codesign --verify --strict dist/MacDeck.app`:
+     - 서명 유효성 무오류 통과.
+  5. `/Users/sjhdeux/Applications/MacDeck.app` 동기화 및 자체 검사:
+     - 88개 검사 통과 및 strict 서명 검증 완료.
+
+- **남은 작업 / 제약**:
+  1. 실제 다양한 게임(DMC5, RE3, 기타 Steam 라이브러리 보유 게임)에서 동영상 재생 및 배경음악/효과음 정상 출력, 스터터링 체감 여부를 사용자가 인게임 플레이를 통해 교차 검증 필요.
+  2. 업데이트 빌드 교체 시 ad-hoc 서명 cdhash 변경으로 인한 외장 볼륨 접근 권한 팝업은 Apple 개발자 인증서 서명 도입 전까지 OS 차원의 기본 동작임.
+
