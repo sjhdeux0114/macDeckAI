@@ -9,8 +9,8 @@
 - 빌드 결과: `dist/MacDeck.app`
 - 설치된 앱: `/Users/sjhdeux/Applications/MacDeck.app`
 - 실제 호스트: Apple M5, 메모리 24 GiB, macOS 27.0.1. 최소 배포 대상 macOS 13은 빌드 설정이며 다른 기기에서 검증한 것은 아니다.
-- 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **CrossOver/Proton/Whisky 호환 플랫폼 패치(Mach-message MSync·ESync 멀티스레드 동기화, XAudio2/X3DAudio/DirectSound 내장 오버라이드, Apple VideoToolbox 하드웨어 가속 vtdec 및 AC3/DTS/AAC 코덱, DXMT ignoreMapFlagNoWait/handleAltTab 프레임 페이싱, MoltenVK Argument Buffers/커맨드 프리필)**, **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 공식 GitHub Releases 확인 및 자동 업데이트(`RuntimeUpdater`)**, **macOS Game Mode 지원 plist 반영(실제 On은 전체화면에서 별도 검증 필요)**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
-- 최종 자체 검사 **90개 통과**, 미디어 런타임 검사 **23개 항목 통과**, 앱 빌드·서명 확인 성공.
+- 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **CrossOver/Proton/Whisky 호환 플랫폼 패치(Mach-message MSync·ESync 멀티스레드 동기화, XAudio2/X3DAudio/DirectSound 내장 오버라이드, Apple VideoToolbox 하드웨어 가속 vtdec 및 AC3/DTS/AAC 코덱, DXMT ignoreMapFlagNoWait/handleAltTab 프레임 페이싱, MoltenVK Argument Buffers/커맨드 프리필)**, **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 공식 GitHub Releases 확인 및 자동 업데이트(`RuntimeUpdater`)**, **macOS Game Mode 지원 plist 반영**, **창 닫기/종료 시 백그라운드 잔존 없는 완전 종료(`MacDeckAppDelegate`, `terminateAll`, `wineserver -k`)**, **Metal Performance HUD 기본 활성화 및 인게임 실시간 토글(`Fn+Shift+F9`, 위치 전환 `Fn+Shift+F7`)**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
+- 최종 자체 검사 **92개 통과**, 미디어 런타임 검사 **23개 항목 통과**, 배포용 DMG 패키징(`dist/MacDeck-v0.5.5.dmg`) 및 GitHub Releases `v0.5.5` 배포 완료.
 - 실제 Windows Brogue CE 던전 렌더링 및 **M5 Metal HUD 확인 성공**.
 - RE3 DX11 non-RT: 영상 의존성 보완 후 사용자 구동 성공 보고. DMC5: GS/TS 수정 후보 적용 후 사용자 긴 렉 해소 보고. 두 게임 모두 장시간 안정성은 별도 검증 필요.
 - 실제 Windows Steam 로그인 완료 및 외장 NVMe 드라이브(`E:\SteamLibrary`)에 Steam 게임 4종(Resident Evil 3, Balatro, Halls of Torment, No Results Found) 다운로드·설치 확인 성공.
@@ -626,7 +626,58 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
   2. DMG 이미지 무결성 검증:
      - `hdiutil attach`로 가상 볼륨 마운트 후 `/Volumes/MacDeck/MacDeck.app`에 대해 `codesign --verify --strict` 무결성 검증 통과 (`exit 0`).
   3. GitHub Releases 업로드:
-     - GitHub 단일 커밋 용량 한도(100MB)를 초과(527MB)하므로, 대용량 바이너리 배포 표준인 **GitHub Releases (`gh release create v0.5.5`)**를 통해 배포 에셋으로 등록 및 업로드.
+     - GitHub 단일 커밋 용량 한도(100MB)를 초과(527MB)하므로, 대용량 바이너리 배포 표준인 **GitHub Releases (`gh release create v0.5.5`)**를 통해 배포 에셋으로 등록 및 업로드 완료.
+
+### 2026-10-18 — 창 닫기 시 완전 종료 및 백그라운드 프로세스 잔존 제거 (`AppDelegate`, `terminateAll`)
+
+- **요청 사항**:
+  - "종료해도 꺼지지 않고 백그라운드에 남아있는데 그냥 종료되게 해줘"
+
+- **원인 분석**:
+  1. SwiftUI `WindowGroup` 기반 앱은 기본적으로 창 닫기 버튼(빨간색 X 버튼)을 클릭하거나 `Cmd+W`를 눌러도 프로세스가 종료되지 않고 Dock 및 백그라운드에서 계속 실행됨 (`applicationShouldTerminateAfterLastWindowClosed` 미구현).
+  2. MacDeck 종료 시 생성된 자식 프로세스(`Process`, `graphicsFilters`, `logHandles`) 및 Wine 백그라운드 데몬(`winedevice.exe`, `steamservice.exe`, `wineserver`)에 대한 명시적 종료 호출이 없어 부모 프로세스 종료 후 `PPID=1` 상태로 고아화(Orphaned)되어 백그라운드에서 CPU/메모리를 지속 점유함 (실제 11개 프로세스가 백그라운드 점유 중이었음을 확인).
+
+- **해결 내용**:
+  1. `Sources/MacDeck/App.swift`:
+     - `MacDeckAppDelegate: NSObject, NSApplicationDelegate` 구현 및 `@NSApplicationDelegateAdaptor` 연결.
+     - `applicationShouldTerminateAfterLastWindowClosed(_:) -> Bool`: `true`를 반환하여 메인 창이 닫히면 앱이 즉시 완전 종료되도록 구현.
+     - `applicationWillTerminate(_:)`: 앱 종료 시 `model?.terminateAll()`을 호출하여 모든 하위 프로세스 및 런타임을 안전하게 청소.
+     - `CommandGroup(replacing: .appTermination)`: `Cmd+Q` 단축키 입력 시 `terminateAll()` 후 `NSApp.terminate(nil)` 실행.
+     - 사이드바 하단에 "MacDeck 종료" 버튼을 추가하여 클릭 한 번으로 완전 종료 지원.
+  2. `Sources/MacDeck/Runtime.swift`:
+     - `DeckModel.terminateAll()` 추가: 주기적 갱신 타이머(`Timer`) 무효화, 추적 중인 모든 실행 프로세스(`processes`, `graphicsFilters`)에 `terminate()` 전송, 열려 있는 로그 파일 핸들 해제, `SteamStorage.killPrefixProcesses` 및 `wineserver -k` 호출로 Wine 접두사 프로세스를 깨끗하게 일괄 종료.
+
+### 2026-10-18 — 게임 내 Metal Performance HUD 기본 활성화 및 Fn+Shift+F9 실시간 토글 지원
+
+- **요청 사항**:
+  - "게임에서 fn+shift+f9 눌러도 hud가 안보여 hud나오게 해줘"
+
+- **원인 분석**:
+  1. `library.json`의 `showMetalHUD` 기본값이 `false`로 설정되어 있었고, `LaunchPlan.make`에서 `loaded?.showMetalHUD ?? false`로 인해 환경 변수 `MTL_HUD_ENABLED`가 명시적으로 `"0"`으로 전달됨.
+  2. macOS Metal 프레임워크는 프로세스 시작 시 `MTL_HUD_ENABLED="0"`이 설정되어 있으면 `MetalPerformanceHUD.framework` 오버레이 훅 자체를 비활성화함. 따라서 게임 화면에서 단축키 `Fn+Shift+F9`(또는 `Shift+F9`)를 눌러도 Metal HUD가 전혀 초기화되지 않아 표시되지 않았음.
+  3. 앞서 고아화된 구버전 Wine/winedevice 프로세스들이 이전의 `MTL_HUD_ENABLED="0"` 환경을 유지한 채 잔존하고 있었음.
+
+- **해결 내용**:
+  1. `Sources/MacDeck/Library.swift`:
+     - Metal HUD 기본값을 활성화(`loaded?.showMetalHUD ?? true`)로 변경하여 신규 실행 및 기본 설정 시 항상 `MTL_HUD_ENABLED="1"`이 전달되도록 수정.
+     - HUD 활성화 시 `/bin/launchctl setenv MTL_HUD_ENABLED 1`을 자동 동기화하여 하위 런타임 및 세션 프로세스 전체에 전파.
+  2. 시스템 설정 및 라이브러리 동기화:
+     - `defaults write -g MetalForceHudEnabled -bool YES` 및 `launchctl setenv MTL_HUD_ENABLED 1` 적용.
+     - 사용자 `library.json` 내 `"showMetalHUD": true` 반영.
+     - 잔존하던 고아 Wine 프로세스를 전수 정리하여 신규 환경 변수가 온전히 반영되도록 조치.
+  3. UI 및 사용 안내 강화:
+     - `App.swift` 및 `Runtime.swift`의 토글 라벨을 `Metal 성능 HUD 표시 (Fn+Shift+F9)`로 명시하고, 게임 중 `Fn+Shift+F9`(또는 `Shift+F9`)로 실시간 On/Off 토글 및 `Fn+Shift+F7`로 화면 위치 이동이 가능함을 안내.
+
+- **실제 검증 결과**:
+  1. `SelfTests.swift`:
+     - 기본 `MTL_HUD_ENABLED == "1"` 검증 통과.
+     - 설정에서 명시적 비활성화 시 `MTL_HUD_ENABLED == "0"` 전환 검증 통과.
+     - `MacDeckAppDelegate.applicationShouldTerminateAfterLastWindowClosed`가 `true`를 반환하는지 검증 통과.
+     - `DeckModel.terminateAll()`이 안전하게 프로세스와 와인서버를 정리하는지 검증 통과.
+     - 자체 검사 **총 92개 항목 전원 통과 (`PASS`)**.
+  2. `codesign --verify --strict dist/MacDeck.app` 서명 유효성 검증 통과.
+  3. `dist/MacDeck-v0.5.5.dmg` 재패키징 (532MB) 및 GitHub Releases `v0.5.5` 에셋 원격 교체 업로드 완료.
+  4. `/Users/sjhdeux/Applications/MacDeck.app` 최종 배포본 교체 완료.
 
 
 

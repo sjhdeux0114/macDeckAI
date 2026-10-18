@@ -799,7 +799,7 @@ final class DeckModel: ObservableObject {
             var data = library
             data.showMetalHUD = enabled
             try commit(data)
-            steamProgress = "성능 표시 설정은 Steam과 게임을 완전히 종료한 뒤 다시 실행하면 적용됩니다."
+            steamProgress = "Metal 성능 HUD 설정(\(enabled ? "켬" : "끔"))이 저장되었습니다. 게임 실행 중 Fn+Shift+F9(또는 Shift+F9)로 언제든지 실시간으로 켜고 끌 수 있습니다."
         } catch { message = error.localizedDescription }
     }
 
@@ -823,5 +823,43 @@ final class DeckModel: ObservableObject {
             if data.games != library.games { try commit(data) }
             if !silent { steamProgress = "설치된 Steam 게임 \(found.count)개를 확인했습니다. 전체 보유 라이브러리는 Steam에서 볼 수 있습니다." }
         } catch { if !silent { message = error.localizedDescription } }
+    }
+
+    func terminateAll() {
+        timer?.invalidate()
+        timer = nil
+        for (_, process) in processes {
+            if process.isRunning { process.terminate() }
+        }
+        for (_, filter) in graphicsFilters {
+            if filter.isRunning { filter.terminate() }
+        }
+        for (_, handle) in logHandles {
+            try? handle.close()
+        }
+        processes.removeAll()
+        graphicsFilters.removeAll()
+        logHandles.removeAll()
+        sessions.removeAll()
+
+        let winePath = runtime.path ?? Runtime.inspect(custom: library.winePath).path
+        if let wine = winePath {
+            SteamStorage(client: SteamClient(disk: disk)).killPrefixProcesses(wine: wine)
+            let server = URL(fileURLWithPath: wine).resolvingSymlinksInPath()
+                .deletingLastPathComponent().appendingPathComponent("wineserver")
+            if FileManager.default.isExecutableFile(atPath: server.path) {
+                let killProc = Process()
+                killProc.executableURL = server
+                killProc.arguments = ["-k"]
+                killProc.standardOutput = FileHandle.nullDevice
+                killProc.standardError = FileHandle.nullDevice
+                try? killProc.run()
+                let deadline = Date().addingTimeInterval(1.0)
+                while killProc.isRunning && Date() < deadline {
+                    usleep(20_000)
+                }
+                if killProc.isRunning { killProc.terminate() }
+            }
+        }
     }
 }

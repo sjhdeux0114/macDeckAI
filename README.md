@@ -178,6 +178,21 @@ macDeckAI/
 
 > 세부적인 작업·검증·디버깅 누적 기록은 [`work.md`](work.md)에서 확인할 수 있습니다.
 
+### v0.5.5 (2026-10-18)
+- **게임 내 Apple Metal Performance HUD 기본 활성화 및 인게임 단축키 (`Fn + Shift + F9`) 지원**:
+  - 기존에는 `showMetalHUD`가 비활성화되어 `MTL_HUD_ENABLED="0"`이 명시적으로 주입됨에 따라 macOS Metal 프레임워크가 HUD 오버레이 자체를 로드하지 않아 게임 중 `Fn + Shift + F9`를 눌러도 HUD가 나타나지 않았습니다.
+  - Metal HUD 기본값을 켬(`MTL_HUD_ENABLED="1"`)으로 변경하고 전역 defaults(`MetalForceHudEnabled=YES`) 및 세션 환경을 동기화하여, 게임 화면에서 실시간으로 **`Fn + Shift + F9`**(또는 `Shift + F9`)를 눌러 FPS·GPU 사용률·프레임 간격 오버레이를 자유롭게 켜고 끌 수 있도록 개선했습니다. (`Fn + Shift + F7`로 화면 표시 위치 순환 가능)
+- **창 닫기 및 앱 종료 시 완전 종료 (`applicationShouldTerminateAfterLastWindowClosed` & `terminateAll`)**:
+  - SwiftUI WindowGroup에서 창 닫기 버튼(빨간색 X 버튼)을 누르면 앱이 종료되지 않고 백그라운드에 남아있던 문제를 해결하기 위해 `MacDeckAppDelegate`를 구현하여 창이 닫히면 앱이 즉시 완전 종료되도록 처리했습니다.
+  - 앱 종료(`Cmd + Q`, 창 닫기, 사이드바 "MacDeck 종료" 버튼) 시 `DeckModel.terminateAll()`을 호출하여 실행 중인 자식 프로세스, 로그 핸들, 타이머뿐만 아니라 Wine 백그라운드 데몬(`winedevice.exe`, `steamservice.exe`, `wineserver`)까지 안전하고 완벽하게 정리하여 백그라운드 자원 점유를 방지했습니다.
+- **CrossOver / Proton / Whisky 호환 렉·오디오·비디오 최적화 패치 일괄 적용**:
+  - Mach-message 기반 초고속 멀티스레드 동기화(`WINEMSYNC=1`, `WINEESYNC=1`, `WINE_LARGE_ADDRESS_AWARE=1`)로 CPU 스레드 병목 및 렉 해소.
+  - XAudio2/X3DAudio/DirectSound Wine 내장 오버라이드로 컷씬 대사 누락 및 무음 방지.
+  - Apple VideoToolbox 하드웨어 가속(`vtdec`, `vtdec_hw`), AC-3, DTS, MP4/MKV GStreamer 확장 패키지 번들링 및 1.3MB 사전 인덱싱 레지스트리 자동 시딩으로 초기 로딩 프리징 제거.
+  - DX11 DXMT 맵 플래그/Alt-Tab 크래시 방지(`DXMT_CONFIG`), DX12 MoltenVK Argument Buffers 및 커맨드 버퍼 사전 채움 최적화 적용.
+- **배포용 DMG 패키징 및 GitHub Releases 배포**:
+  - `dist/MacDeck-v0.5.5.dmg` 고압축 UDZO 배포 이미지(532MB) 생성 및 GitHub Releases `v0.5.5` 배포 완료. 자체 검증 테스트 **92개 전원 통과**.
+
 ### v0.5.3 (2026-10-18)
 - **`steamwebhelper.exe` `0x80000003` (`DelayLoadFailureHook`) 크래시 및 `winedbg` 모달/콘솔 팝업 근본 수정**:
   - **원인 규명**: `libcef.dll`의 RVA `0x59ef905`(Chromium `DelayLoadFailureHook`)에서 지연 로드 대상(`dxgi.dll`, `d3d12.dll`) 로드 실패 시 즉시 `int3`(`0x80000003`) 예외가 발생하는 것을 확인했습니다. `Bottles/Steam/drive_c/windows/system32/dxgi.dll` 누락 및 `d3d12,d3d12core=` 비활성화 오버라이드가 결합되어 `steamwebhelper.exe`가 충돌하고, Wine `winedbg --auto`가 모달 에러 창 또는 콘솔 창을 반복 실행하며 공유 메모리(`SteamChrome_MasterStream`)를 잠그던 문제를 해결했습니다.

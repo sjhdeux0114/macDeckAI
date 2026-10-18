@@ -15,13 +15,39 @@ struct Entry {
     }
 }
 
+final class MacDeckAppDelegate: NSObject, NSApplicationDelegate {
+    weak var model: DeckModel?
+    static weak var sharedModel: DeckModel?
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                (model ?? Self.sharedModel)?.terminateAll()
+            }
+        } else {
+            DispatchQueue.main.sync {
+                MainActor.assumeIsolated {
+                    (self.model ?? Self.sharedModel)?.terminateAll()
+                }
+            }
+        }
+    }
+}
+
 struct MacDeckApp: App {
+    @NSApplicationDelegateAdaptor(MacDeckAppDelegate.self) var appDelegate
     @StateObject private var model = DeckModel()
     var body: some Scene {
         WindowGroup("MacDeck") {
             DeckView(model: model).frame(minWidth: 960, minHeight: 650)
                 .preferredColorScheme(.dark)
                 .onAppear {
+                    appDelegate.model = model
+                    MacDeckAppDelegate.sharedModel = model
                     NSApp.setActivationPolicy(.regular)
                     NSApp.applicationIconImage = NSImage(systemSymbolName: "gamecontroller.fill", accessibilityDescription: "MacDeck")
                     if CommandLine.arguments.contains("--verify-game"), var game = model.game {
@@ -39,6 +65,12 @@ struct MacDeckApp: App {
         }
         .defaultSize(width: 1160, height: 780)
         .commands {
+            CommandGroup(replacing: .appTermination) {
+                Button("MacDeck 종료") {
+                    model.terminateAll()
+                    NSApp.terminate(nil)
+                }.keyboardShortcut("q", modifiers: .command)
+            }
             CommandGroup(after: .newItem) {
                 Button("게임 추가…", action: model.chooseGame).keyboardShortcut("o")
                 Button("런타임 설정") { model.page = "runtime" }.keyboardShortcut(",")
@@ -121,7 +153,11 @@ struct DeckView: View {
                 Text(model.graphicsBackend == .dxmt ? "DXMT → Metal (DirectX 11)" : "VKD3D · MoltenVK → Metal (DirectX 12)").font(.system(size: 10)).foregroundStyle(.secondary)
             }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
             Button("데이터 폴더 열기", action: model.revealData).buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 12)
-            Text("MacDeck · Preview 0.5.4").font(.system(size: 10)).foregroundStyle(.tertiary).padding(.top, 6)
+            Button("MacDeck 종료") {
+                model.terminateAll()
+                NSApp.terminate(nil)
+            }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
+            Text("MacDeck · 0.5.5").font(.system(size: 10)).foregroundStyle(.tertiary).padding(.top, 6)
         }.padding(20).background(Color(red: 0.075, green: 0.085, blue: 0.1))
     }
 
@@ -329,8 +365,8 @@ struct DeckView: View {
                 Link("Apple 설치 안내", destination: URL(string: "https://support.apple.com/102527")!)
             }
             panel("그래픽 검증 및 macOS 게임 모드", icon: "sparkles") {
-                Toggle("Metal 성능 HUD 표시", isOn: Binding(get: { model.library.showMetalHUD ?? false }, set: model.setMetalHUD))
-                Text("기본값은 끔입니다. 변경 후 Steam과 게임을 완전히 종료하고 다시 실행하세요. HUD를 꺼도 Metal 가속과 오류 로그는 유지됩니다.")
+                Toggle("Metal 성능 HUD 표시 (Fn+Shift+F9)", isOn: Binding(get: { model.library.showMetalHUD ?? true }, set: model.setMetalHUD))
+                Text("기본값은 켬입니다. 게임 화면에서 Fn+Shift+F9(또는 Shift+F9)로 언제든지 실시간으로 켜고 끌 수 있습니다. Fn+Shift+F7로 화면 표시 위치를 변경할 수 있습니다.")
                 Text("DX11 Mode는 D3D10/11을 DXMT로 가속하며 D3D12 전용 게임을 DX11로 변환하지 않습니다. DX12 Mode는 실험적입니다. Game Mode가 Off이면 게임 창에서 Control–Command–F로 기본 전체화면에 진입하고 macOS 게임 오버레이에서 상태를 확인하세요.").font(.callout).foregroundStyle(.secondary)
                 Button("로그 및 데이터 폴더", action: model.revealData)
             }

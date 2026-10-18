@@ -370,8 +370,15 @@ struct LaunchPlan {
             environment["DXMT_LOG_LEVEL"] = "info"
             environment["DXMT_LOG_PATH"] = disk.logs.path
             environment["DXMT_CONFIG"] = "d3d11.ignoreMapFlagNoWait=True;dxgi.handleAltTab=True;d3d11.maxTessFactor=64"
-            environment["MTL_HUD_ENABLED"] = (loaded?.showMetalHUD ?? false) ? "1" : "0"
+            let hudEnabled = loaded?.showMetalHUD ?? true
+            environment["MTL_HUD_ENABLED"] = hudEnabled ? "1" : "0"
             environment["SDL_RENDER_DRIVER"] = "direct3d11"
+            if hudEnabled {
+                let launchctl = Process()
+                launchctl.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+                launchctl.arguments = ["setenv", "MTL_HUD_ENABLED", "1"]
+                try? launchctl.run()
+            }
             if mode == .d3d12 {
                 // Surface device loss to the game. Continuing after a GPU timeout
                 // left RE3 submitting invalid work and hanging on a black screen.

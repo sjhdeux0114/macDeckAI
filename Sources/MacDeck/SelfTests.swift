@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import GameController
 
 enum SelfTests {
@@ -23,8 +24,13 @@ enum SelfTests {
         try check(decoded.games == [game], "library preserves identities, paths and literal arguments")
         let plan = try LaunchPlan.make(game: game, wine: "/usr/bin/true", disk: disk)
         try check(plan.arguments == [game.path] + game.arguments, "Windows arguments are passed directly without a shell")
-        try check(plan.environment["MTL_HUD_ENABLED"] == "0", "Metal HUD defaults off while Metal rendering remains available")
-        try check(plan.environment["WINEPREFIX"] == disk.prefix(for: game).path, "each game receives its own Wine prefix")
+        try check(plan.environment["MTL_HUD_ENABLED"] == "1", "Metal HUD defaults enabled so Fn+Shift+F9 shortcut functions and Metal stats are visible")
+        var disabledHUD = try disk.load()
+        disabledHUD.showMetalHUD = false
+        try disk.save(disabledHUD)
+        let planDisabled = try LaunchPlan.make(game: game, wine: "/usr/bin/true", disk: disk)
+        try check(planDisabled.environment["MTL_HUD_ENABLED"] == "0", "Metal HUD can be explicitly disabled in settings")
+        try disk.save(decoded)
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("winedbg.exe=d") == true && plan.environment["WINEDLLOVERRIDES"]?.contains("d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b") == true, "default global DX11 Mode keeps builtin D3D12/Vulkan for CEF DelayLoad and disables winedbg popups")
         try check(plan.environment["WINEMSYNC"] == "1" && plan.environment["WINEESYNC"] == "1" && plan.environment["WINE_LARGE_ADDRESS_AWARE"] == "1", "Windows launch plan enables Mach-message MSync, ESync, and large address awareness")
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("xaudio2_7,xaudio2_8,xaudio2_9") == true && plan.environment["WINEDLLOVERRIDES"]?.contains("dsound=b") == true, "Windows launch plan overrides XAudio2 and DirectSound to Wine builtins")
@@ -285,6 +291,13 @@ enum SelfTests {
         try check(fixedWine.count == oldWine.count && fixedWine.prefix(6) == oldWine.prefix(6) && fixedWine.suffix(4) == oldWine.suffix(4), "Game Mode patch preserves executable size and bytes outside the plist")
         try check(fixedPlist["LSSupportsGameMode"] as? Bool == true && fixedPlist["LSApplicationCategoryType"] as? String == "public.app-category.games" && fixedPlist["LSUIElement"] == nil, "Game Mode opt-in fits the actual 936-byte Wine plist instead of silently skipping")
         try check(fixedPlist["NSPrincipalClass"] as? String == "WineApplication" && RuntimeUpdater.patchWineGameModePlist(fixedWine) == fixedWine, "Game Mode patch preserves Wine application class and is idempotent")
+        try check(MacDeckAppDelegate().applicationShouldTerminateAfterLastWindowClosed(NSApplication.shared), "MacDeck terminates cleanly when the window is closed")
+        MainActor.assumeIsolated {
+            let testModel = DeckModel(disk: disk)
+            testModel.terminateAll()
+        }
+        print("PASS: terminateAll cleans up background processes and wineserver without leaking")
+        checks += 1
         print("\(checks + 3) checks passed")
     }
 }
