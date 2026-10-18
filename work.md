@@ -614,4 +614,19 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
      - 자체 검증 **90개 테스트 전원 통과 (`PASS`)**.
   3. `/Users/sjhdeux/Applications/MacDeck.app` 실행 파일 동기화, ad-hoc 재서명 및 strict 서명 유효성 검증 완료.
 
+### 2026-10-18 — 배포용 DMG 패키징 및 GitHub Release v0.5.5 업로드
+
+- **요청 사항**:
+  - 배포할 수 있는 `.dmg` 파일을 생성하고 Git/GitHub에 업로드.
+
+- **작업 내용**:
+  1. `scripts/package-dmg.sh` 생성:
+     - 배포용 DMG 스테이징 디렉터리 구성 및 사용자가 손쉽게 드래그 앤 드롭으로 설치할 수 있도록 `/Applications` 심볼릭 링크 포함.
+     - `hdiutil create -format UDZO -volname "MacDeck"` 고압축 이미지 생성 (1.2GB 원본 -> 527MB 압축).
+  2. DMG 이미지 무결성 검증:
+     - `hdiutil attach`로 가상 볼륨 마운트 후 `/Volumes/MacDeck/MacDeck.app`에 대해 `codesign --verify --strict` 무결성 검증 통과 (`exit 0`).
+  3. GitHub Releases 업로드:
+     - GitHub 단일 커밋 용량 한도(100MB)를 초과(527MB)하므로, 대용량 바이너리 배포 표준인 **GitHub Releases (`gh release create v0.5.5`)**를 통해 배포 에셋으로 등록 및 업로드.
+
+
 

@@ -336,5 +336,8 @@ macDeckAI/
 - **초기 로딩 프리징 방지 및 Prefix 그래픽 DLL 동기화 보강**:
   - `Runtime/Media/gst-registry.bin` 사전 캐시 번들링 및 자동 시딩을 통해 최초 게임 구동 시 10~15초 플러그인 전수조사 프리징을 완전히 제거.
   - Prefix(`drive_c/windows/{system32,syswow64}`) 내부 그래픽 DLL(`d3d11.dll` 등)을 바이트 단위로 검사하여 런타임 최신 패치 버전을 원자적으로 강제 동기화.
+- **배포용 DMG 패키징 (`scripts/package-dmg.sh`)**:
+  - `/Applications` 심볼릭 링크를 포함한 드래그 앤 드롭 설치 디스크 이미지(`MacDeck-v0.5.5.dmg`, 527MB) 생성 및 GitHub Releases 배포 지원.
 - 자체 검증 테스트 총 **90개 통과** 및 strict 코드 서명 검증 완료.
+
 
