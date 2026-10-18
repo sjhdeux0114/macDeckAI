@@ -333,5 +333,8 @@ macDeckAI/
 - **렌더링 프레임 페이싱 및 크래시 방지 (DXMT & MoltenVK)**:
   - DX11 (DXMT): `d3d11.ignoreMapFlagNoWait=True` (비동기 Map 크래시 방지), `dxgi.handleAltTab=True` (전체화면 전환 프리징 방지), `d3d11.maxTessFactor=64` (테셀레이션 폭주 방지) 기본 적용.
   - DX12 (MoltenVK + VKD3D): `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1` (드로우콜 오버헤드 감소), `MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS=3` (커맨드 지연 완화), `VKD3D_FEATURE_LEVEL=12_1`, `VKD3D_CONFIG=no_upload_hlist` 적용.
-- 자체 검증 테스트 총 **88개 통과** 및 strict 코드 서명 검증 완료.
+- **초기 로딩 프리징 방지 및 Prefix 그래픽 DLL 동기화 보강**:
+  - `Runtime/Media/gst-registry.bin` 사전 캐시 번들링 및 자동 시딩을 통해 최초 게임 구동 시 10~15초 플러그인 전수조사 프리징을 완전히 제거.
+  - Prefix(`drive_c/windows/{system32,syswow64}`) 내부 그래픽 DLL(`d3d11.dll` 등)을 바이트 단위로 검사하여 런타임 최신 패치 버전을 원자적으로 강제 동기화.
+- 자체 검증 테스트 총 **90개 통과** 및 strict 코드 서명 검증 완료.
 

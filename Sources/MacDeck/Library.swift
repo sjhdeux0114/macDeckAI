@@ -191,11 +191,11 @@ enum DirectX12Support {
             }
             for dll in ["d3d11.dll", "d3d10core.dll", "d3d12.dll", "d3d12core.dll", "winemetal.dll"] {
                 let targetDLL = winDir.appendingPathComponent(dll)
-                if !FileManager.default.fileExists(atPath: targetDLL.path) {
-                    let srcDLL = root.appendingPathComponent("lib/wine/\(item.arch)/\(dll)")
-                    if FileManager.default.fileExists(atPath: srcDLL.path) {
-                        try? FileManager.default.copyItem(at: srcDLL, to: targetDLL)
-                    }
+                let srcDLL = root.appendingPathComponent("lib/wine/\(item.arch)/\(dll)")
+                if FileManager.default.fileExists(atPath: srcDLL.path),
+                   let bytes = try? Data(contentsOf: srcDLL),
+                   (try? Data(contentsOf: targetDLL)) != bytes {
+                    try? bytes.write(to: targetDLL, options: .atomic)
                 }
             }
         }
@@ -356,7 +356,12 @@ struct LaunchPlan {
                 environment["GST_PLUGIN_SYSTEM_PATH_1_0"] = media.appendingPathComponent("lib/gstreamer-1.0").path
                 environment["GST_PLUGIN_PATH_1_0"] = ""
                 environment["GST_PLUGIN_SCANNER_1_0"] = media.appendingPathComponent("libexec/gstreamer-1.0/gst-plugin-scanner").path
-                environment["GST_REGISTRY_1_0"] = disk.logs.appendingPathComponent("gst-registry-x86_64.bin").path
+                let userRegistry = disk.logs.appendingPathComponent("gst-registry-x86_64.bin")
+                let bundledRegistry = media.appendingPathComponent("gst-registry.bin")
+                if !FileManager.default.fileExists(atPath: userRegistry.path), FileManager.default.fileExists(atPath: bundledRegistry.path) {
+                    try? FileManager.default.copyItem(at: bundledRegistry, to: userRegistry)
+                }
+                environment["GST_REGISTRY_1_0"] = userRegistry.path
             }
             environment["WINEMSYNC"] = "1"
             environment["WINEESYNC"] = "1"

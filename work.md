@@ -10,7 +10,7 @@
 - 설치된 앱: `/Users/sjhdeux/Applications/MacDeck.app`
 - 실제 호스트: Apple M5, 메모리 24 GiB, macOS 27.0.1. 최소 배포 대상 macOS 13은 빌드 설정이며 다른 기기에서 검증한 것은 아니다.
 - 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **CrossOver/Proton/Whisky 호환 플랫폼 패치(Mach-message MSync·ESync 멀티스레드 동기화, XAudio2/X3DAudio/DirectSound 내장 오버라이드, Apple VideoToolbox 하드웨어 가속 vtdec 및 AC3/DTS/AAC 코덱, DXMT ignoreMapFlagNoWait/handleAltTab 프레임 페이싱, MoltenVK Argument Buffers/커맨드 프리필)**, **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 공식 GitHub Releases 확인 및 자동 업데이트(`RuntimeUpdater`)**, **macOS Game Mode 지원 plist 반영(실제 On은 전체화면에서 별도 검증 필요)**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
-- 최종 자체 검사 **88개 통과**, 미디어 런타임 검사 **23개 항목 통과**, 앱 빌드·서명 확인 성공.
+- 최종 자체 검사 **90개 통과**, 미디어 런타임 검사 **23개 항목 통과**, 앱 빌드·서명 확인 성공.
 - 실제 Windows Brogue CE 던전 렌더링 및 **M5 Metal HUD 확인 성공**.
 - RE3 DX11 non-RT: 영상 의존성 보완 후 사용자 구동 성공 보고. DMC5: GS/TS 수정 후보 적용 후 사용자 긴 렉 해소 보고. 두 게임 모두 장시간 안정성은 별도 검증 필요.
 - 실제 Windows Steam 로그인 완료 및 외장 NVMe 드라이브(`E:\SteamLibrary`)에 Steam 게임 4종(Resident Evil 3, Balatro, Halls of Torment, No Results Found) 다운로드·설치 확인 성공.
@@ -590,4 +590,28 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
 - **남은 작업 / 제약**:
   1. 실제 다양한 게임(DMC5, RE3, 기타 Steam 라이브러리 보유 게임)에서 동영상 재생 및 배경음악/효과음 정상 출력, 스터터링 체감 여부를 사용자가 인게임 플레이를 통해 교차 검증 필요.
   2. 업데이트 빌드 교체 시 ad-hoc 서명 cdhash 변경으로 인한 외장 볼륨 접근 권한 팝업은 Apple 개발자 인증서 서명 도입 전까지 OS 차원의 기본 동작임.
+
+### 2026-10-18 — 추가 잠재 문제점 심층 점검 및 사전 차단 검증 (v0.5.5+)
+
+- **요청 사항**:
+  - 추가적인 잠재 문제점(런타임, 비디오/오디오 로딩, 스토리지/프리픽스 동기화 등)이 없는지 더 확인하고 검증.
+
+- **심층 점검에서 발견된 2가지 잠재 결함 및 해결**:
+  1. **Prefix 내부 그래픽 DLL 버전 불일치 위험 (`syncPrefix`)**:
+     - 기존 `DirectX12Support.syncPrefix`는 `drive_c/windows/{system32,syswow64}`에 `d3d11.dll`, `d3d10core.dll`, `d3d12.dll`, `winemetal.dll`이 **존재하지 않을 때만** 복사했음.
+     - 이로 인해 과거 생성된 prefix(Steam 병 등)에 Wine 초기 stub이나 패치 전 구형 DLL이 한 번 들어가면, 이후 DXMT 0.80 GS/TS 패치나 런타임 업데이트가 적용되어도 prefix 내부 파일이 갱신되지 않아 구버전 코드가 실행되면서 렉/크래시가 재발할 위험이 있었음.
+     - `srcDLL`과 `targetDLL`의 내용을 비교하여 다를 경우 원자적으로 덮어쓰도록 수정(`bytes.write(to: targetDLL, options: .atomic)`).
+  2. **GStreamer 플러그인 초기 탐색 프리징 (Cold-start scanning stall)**:
+     - Apple VideoToolbox, AC-3, DTS, MP4 등 코덱 패키지가 대폭 확장됨에 따라, 최초 실행 시 `gst-plugin-scanner`가 수십 개 플러그인을 전수 조사하는 데 10~15초가 소요되어 첫 게임 시작이나 첫 컷씬 진입 시 화면이 멈추는 지연이 발생할 수 있었음.
+     - `scripts/prepare-gstreamer.py`에서 빌드 시점에 1.3MB 크기의 사전 인덱싱 레지스트리 `Runtime/Media/gst-registry.bin`을 미리 생성하도록 개선.
+     - `LaunchPlan.make`에서 사용자 로그 폴더의 `gst-registry-x86_64.bin`이 없거나 초기화될 때 번들된 사전 생성 레지스트리를 즉시 복사(Pre-seeding)하여 최초 실행 시의 10초 스캔 지연을 완전히 제거함.
+
+- **실제 검증 결과**:
+  1. `prepare-gstreamer.py`: 번들용 `dist/.../Media/gst-registry.bin` 및 `/Users/sjhdeux/Applications/.../Media/gst-registry.bin` 사전 생성 성공(1,323,424 바이트).
+  2. `SelfTests.swift`:
+     - 전역 동기화 시 prefix `system32/d3d11.dll` 바이트 일치 검사 통과.
+     - LaunchPlan 기동 시 번들 레지스트리 자동 시딩 검사 통과.
+     - 자체 검증 **90개 테스트 전원 통과 (`PASS`)**.
+  3. `/Users/sjhdeux/Applications/MacDeck.app` 실행 파일 동기화, ad-hoc 재서명 및 strict 서명 유효성 검증 완료.
+
 

@@ -37,4 +37,12 @@ for package in ['base-system-1.0', 'base-crypto', 'gstreamer-1.0-core', 'gstream
             target.unlink()
     shutil.copytree(payload, media, symlinks=True, dirs_exist_ok=True)
 (media / 'macdeck-source.txt').write_text(f'Official GStreamer {version}\nSHA256 {digest}\nPrivate extraction; no system installer executed.\n')
+env = dict(
+    GST_REGISTRY_1_0=str(media / 'gst-registry.bin'),
+    GST_PLUGIN_SYSTEM_PATH_1_0=str(media / 'lib/gstreamer-1.0'),
+    GST_PLUGIN_PATH_1_0='',
+    GST_PLUGIN_SCANNER_1_0=str(media / 'libexec/gstreamer-1.0/gst-plugin-scanner')
+)
+subprocess.run(['/usr/bin/arch', '-x86_64', str(media / 'bin/gst-inspect-1.0'), 'vtdec'], env=env, capture_output=True)
 print(f'Prepared GStreamer {version}: {media}')
+
