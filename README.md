@@ -10,9 +10,9 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
 
 ## 📸 미리보기
 
-| MacDeck 라이브러리 UI | Windows 게임 Metal HUD 구동 (Brogue CE) |
-|---|---|
-| ![MacDeck App](evidence/macdeck-app.png) | ![Metal HUD Game](evidence/macdeck-v02-game-metal.png) |
+| MacDeck 공식 앱 아이콘 | MacDeck 라이브러리 UI | Windows 게임 Metal HUD 구동 (Brogue CE) |
+|:---:|---|---|
+| <img src="resources/AppIcon-1024.png" width="160" alt="MacDeck Icon"/> | ![MacDeck App](evidence/macdeck-app.png) | ![Metal HUD Game](evidence/macdeck-v02-game-metal.png) |
 
 ---
 
@@ -352,7 +352,14 @@ macDeckAI/
   - `Runtime/Media/gst-registry.bin` 사전 캐시 번들링 및 자동 시딩을 통해 최초 게임 구동 시 10~15초 플러그인 전수조사 프리징을 완전히 제거.
   - Prefix(`drive_c/windows/{system32,syswow64}`) 내부 그래픽 DLL(`d3d11.dll` 등)을 바이트 단위로 검사하여 런타임 최신 패치 버전을 원자적으로 강제 동기화.
 - **배포용 DMG 패키징 (`scripts/package-dmg.sh`)**:
-  - `/Applications` 심볼릭 링크를 포함한 드래그 앤 드롭 설치 디스크 이미지(`MacDeck-v0.5.5.dmg`, 527MB) 생성 및 GitHub Releases 배포 지원.
-- 자체 검증 테스트 총 **90개 통과** 및 strict 코드 서명 검증 완료.
+  - `/Applications` 심볼릭 링크를 포함한 드래그 앤 드롭 설치 디스크 이미지(`MacDeck-v0.5.5.dmg`, 537MB) 생성 및 GitHub Releases 배포 지원.
+- **창 닫기 시 백그라운드 프로세스 즉시 완전 종료**:
+  - 메인 창 닫기 시 Wine/Steam 및 자식 프로세스가 백그라운드에 남아있던 현상을 수정하여 `applicationShouldTerminateAfterLastWindowClosed = true` 및 `terminateAll()`(wineserver 강제 정리)을 통해 즉각 완전히 종료되도록 개선.
+- **Metal Performance HUD 실시간 단축키 (`Fn+Shift+F9`) 및 기본 활성화**:
+  - 게임 플레이 중 GPU 프레임률, 프레임타임, 메모리 사용량을 즉시 확인할 수 있도록 `MTL_HUD_ENABLED=1` 기본 활성화 및 `Fn+Shift+F9`(또는 `Shift+F9`) 실시간 온오프 토글, `Fn+Shift+F7` HUD 위치 이동 안내 UI 추가.
+- **MacDeck 전용 3D Apple-스타일 공식 앱 아이콘 (`AppIcon.icns`) 도입**:
+  - Apple macOS 정밀 스퀴클(Superellipse) 규격을 준수한 고해상도(16×16 ~ 1024×1024) 전용 아이콘 제작 및 번들 탑재.
+  - macOS Dock, Launchpad, Cmd+Tab 앱 전환기 및 MacDeck 사이드바에 통일된 아이콘 브랜딩 적용.
+- 자체 검증 테스트 총 **92개 통과** 및 strict 코드 서명 검증 완료.
 
 

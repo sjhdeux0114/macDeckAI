@@ -49,7 +49,11 @@ struct MacDeckApp: App {
                     appDelegate.model = model
                     MacDeckAppDelegate.sharedModel = model
                     NSApp.setActivationPolicy(.regular)
-                    NSApp.applicationIconImage = NSImage(systemSymbolName: "gamecontroller.fill", accessibilityDescription: "MacDeck")
+                    if let appIcon = Bundle.main.image(forResource: "AppIcon") ?? NSImage(named: "AppIcon") {
+                        NSApp.applicationIconImage = appIcon
+                    } else {
+                        NSApp.applicationIconImage = NSImage(systemSymbolName: "gamecontroller.fill", accessibilityDescription: "MacDeck")
+                    }
                     if CommandLine.arguments.contains("--verify-game"), var game = model.game {
                         game.arguments = ["--seed", "42"]
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { model.launch(game) }
@@ -136,8 +140,16 @@ struct DeckView: View {
 
     var sidebar: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Image(systemName: "gamecontroller.fill").font(.system(size: 25)).foregroundStyle(accent)
+            HStack(spacing: 12) {
+                if let icon = Bundle.main.image(forResource: "AppIcon") {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 28, height: 28)
+                        .cornerRadius(6)
+                } else {
+                    Image(systemName: "gamecontroller.fill").font(.system(size: 25)).foregroundStyle(accent)
+                }
                 Text("macdeck").font(.system(size: 24, weight: .bold, design: .rounded))
             }.padding(.bottom, 36).padding(.top, 20)
             Text("PLAY YOUR WAY").font(.system(size: 9, weight: .bold)).tracking(2).foregroundStyle(.secondary).padding(.bottom, 10)

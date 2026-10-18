@@ -668,16 +668,25 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
   3. UI 및 사용 안내 강화:
      - `App.swift` 및 `Runtime.swift`의 토글 라벨을 `Metal 성능 HUD 표시 (Fn+Shift+F9)`로 명시하고, 게임 중 `Fn+Shift+F9`(또는 `Shift+F9`)로 실시간 On/Off 토글 및 `Fn+Shift+F7`로 화면 위치 이동이 가능함을 안내.
 
-- **실제 검증 결과**:
-  1. `SelfTests.swift`:
-     - 기본 `MTL_HUD_ENABLED == "1"` 검증 통과.
-     - 설정에서 명시적 비활성화 시 `MTL_HUD_ENABLED == "0"` 전환 검증 통과.
-     - `MacDeckAppDelegate.applicationShouldTerminateAfterLastWindowClosed`가 `true`를 반환하는지 검증 통과.
-     - `DeckModel.terminateAll()`이 안전하게 프로세스와 와인서버를 정리하는지 검증 통과.
-     - 자체 검사 **총 92개 항목 전원 통과 (`PASS`)**.
-  2. `codesign --verify --strict dist/MacDeck.app` 서명 유효성 검증 통과.
-  3. `dist/MacDeck-v0.5.5.dmg` 재패키징 (532MB) 및 GitHub Releases `v0.5.5` 에셋 원격 교체 업로드 완료.
-  4. `/Users/sjhdeux/Applications/MacDeck.app` 최종 배포본 교체 완료.
+### 2026-10-18 — MacDeck 전용 고해상도 앱 아이콘 디자인 및 통합 (`AppIcon.icns`)
+
+- **요청 사항**:
+  - "macDeck아이콘도 만들어서 넣어줘"
+
+- **디자인 및 구현 내용**:
+  1. **MacDeck 전용 3D Apple-스타일 앱 아이콘 디자인**:
+     - Apple macOS 스퀴클(Superellipse) 규격을 준수하는 다크 옵시디언/스페이스 블랙 브러시드 티타늄 바탕.
+     - MacDeck의 시그니처 네온 민트-에메랄드 그린(`#87E8A3`) 액센트 라이팅과 광택 스크린을 갖춘 미래형 휴대용 콘솔(Steam Deck) 실루엣 엠블럼.
+     - macOS Dock에서 자연스럽게 표시되도록 모서리 외곽 투명화 및 하단 소프트 드롭 섀도우 처리 완료.
+  2. **표준 다중 해상도 `AppIcon.icns` 생성 (`scripts/generate-app-icon.sh`)**:
+     - `sips` 및 `iconutil`을 활용하여 16×16, 32×32, 64×64, 128×128, 256×256, 512×512, 1024×1024(@2x 포함) 전 규격 아이콘셋 빌드 (`resources/AppIcon.icns`, 1.7MB).
+  3. **앱 번들 및 UI 통합**:
+     - `scripts/build-mac-app.sh`: 번들 리소스(`Contents/Resources/AppIcon.icns`) 복사 및 `Info.plist`에 `CFBundleIconFile=AppIcon`, `CFBundleIconName=AppIcon` 자동 주입.
+     - `Sources/MacDeck/App.swift`: 앱 기동 시 `NSApp.applicationIconImage`에 커스텀 `AppIcon`을 등록하여 Dock 및 앱 전환기(Cmd+Tab)에서 전용 아이콘 표시, 사이드바 상단 로고에 28×28 전용 아이콘 배치.
+  4. **배포 반영**:
+     - `/Users/sjhdeux/Applications/MacDeck.app` 교체 설치 및 볼륨 타임스탬프 갱신 (`touch`).
+     - 배포용 `dist/MacDeck-v0.5.5.dmg` (537MB) 재패키징 및 GitHub Releases `v0.5.5` 에셋 교체 업로드 완료.
+
 
 
 
