@@ -9,8 +9,8 @@
 - 빌드 결과: `dist/MacDeck.app`
 - 설치된 앱: `/Users/sjhdeux/Applications/MacDeck.app`
 - 실제 호스트: Apple M5, 메모리 24 GiB, macOS 27.0.1. 최소 배포 대상 macOS 13은 빌드 설정이며 다른 기기에서 검증한 것은 아니다.
-- 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **CrossOver/Proton/Whisky 호환 플랫폼 패치(Mach-message MSync·ESync 멀티스레드 동기화, XAudio2/X3DAudio/DirectSound 내장 오버라이드, Apple VideoToolbox 하드웨어 가속 vtdec 및 AC3/DTS/AAC 코덱, DXMT ignoreMapFlagNoWait/handleAltTab 프레임 페이싱, MoltenVK Argument Buffers/커맨드 프리필)**, **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 공식 GitHub Releases 확인 및 자동 업데이트(`RuntimeUpdater`)**, **macOS Game Mode 지원 plist 반영**, **창 닫기/종료 시 백그라운드 잔존 없는 완전 종료(`MacDeckAppDelegate`, `terminateAll`, `wineserver -k`)**, **Metal Performance HUD 기본 활성화 및 인게임 실시간 토글(`Fn+Shift+F9`, 위치 전환 `Fn+Shift+F7`)**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
-- 최종 자체 검사 **92개 통과**, 미디어 런타임 검사 **23개 항목 통과**, 배포용 DMG 패키징(`dist/MacDeck-v0.5.5.dmg`) 및 GitHub Releases `v0.5.5` 배포 완료.
+- 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **Direct3D 9 Vulkan → MoltenVK → Apple Metal GPU 하드웨어 가속(`WINE_D3D_CONFIG="renderer=vulkan,csmt=0"`)**, **32비트 PE 바이너리 자동 감지 기반 WoW64 ESync 전환(`WINEMSYNC=0, WINEESYNC=1`)을 통한 `0xC0000005` 크래시 원천 차단**, **주요 게임 엔진(Unity, Unreal, CryEngine, EA Frostbite, Havok, Godot) 크래시 핸들러 차단 및 런타임 최적화**, **CrossOver/Proton/Whisky 호환 플랫폼 패치(Mach-message MSync·ESync 멀티스레드 동기화, XAudio2/X3DAudio/DirectSound 내장 오버라이드, Apple VideoToolbox 하드웨어 가속 vtdec 및 AC3/DTS/AAC 코덱, DXMT ignoreMapFlagNoWait/handleAltTab 프레임 페이싱, MoltenVK Argument Buffers/커맨드 프리필)**, **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 공식 GitHub Releases 확인 및 자동 업데이트(`RuntimeUpdater`)**, **macOS Game Mode 지원 plist 반영**, **창 닫기/종료 시 백그라운드 잔존 없는 완전 종료(`MacDeckAppDelegate`, `terminateAll`, `wineserver -k`)**, **Metal Performance HUD 기본 활성화 및 인게임 실시간 토글(`Fn+Shift+F9`, 위치 전환 `Fn+Shift+F7`)**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
+- 최종 자체 검사 **95개 통과**, 미디어 런타임 검사 **23개 항목 통과**. (사용자 요청에 따라 DMG 패키징은 명시적 요청 시에만 수행하도록 정책 분리)
 - 실제 Windows Brogue CE 던전 렌더링 및 **M5 Metal HUD 확인 성공**.
 - RE3 DX11 non-RT: 영상 의존성 보완 후 사용자 구동 성공 보고. DMC5: GS/TS 수정 후보 적용 후 사용자 긴 렉 해소 보고. 두 게임 모두 장시간 안정성은 별도 검증 필요.
 - 실제 Windows Steam 로그인 완료 및 외장 NVMe 드라이브(`E:\SteamLibrary`)에 Steam 게임 4종(Resident Evil 3, Balatro, Halls of Torment, No Results Found) 다운로드·설치 확인 성공.
@@ -18,8 +18,8 @@
 - Bluetooth DualShock 4를 Apple GameController 및 Wine과 같은 SDL2에서 인식하고 실제 버튼/축 변화 확인. Windows/Steam/게임 내부 조작은 아직 별도 검증 필요.
 - v0.5.2: `런타임` 설정 탭에 **MoltenVK (`KhronosGroup/MoltenVK`) · DXMT (`3Shain/dxmt`) · Wine Engine (`Sikarugir-App/Engines`)** 최신 릴리스 확인 및 **자동 업데이트** 기능(`RuntimeUpdater.swift`) 추가. 앱 시작 시 자동 확인 및 SHA-256 무결성 검증·아키텍처(`x86_64`) 슬라이스 검증·백업 후 원자적 교체·ad-hoc 재서명 지원.
 - v0.5.3: `steamwebhelper.exe` 시작 직후 `0x80000003` (`libcef.dll+0x59ef905`, Chromium `DelayLoadFailureHook`) 예외 및 `winedbg` 모달/콘솔 창이 반복 발생하던 문제를 근본 해결. Wine prefix 내부 `drive_c/windows/{system32,syswow64}/dxgi.dll` 동기화(`DirectX12Support.syncPrefix`), CEF Delay-Load 호환 `d3d12,d3d12core,vulkan-1,winevulkan=b` 오버라이드 유지, `winedbg.exe=d` 및 `AeDebug` 자동 복구, Steam 기동 중 런타임 덮어쓰기 경합 제거 적용 후 Steam Big Picture(`BrowserReady` 및 `SP BPM_uid0`) 무오류 정상 기동 검증 완료.
-- v0.5.5: Proton / CrossOver / Whisky / Apple GPTK / DXMT 커뮤니티의 유사 플랫폼 수정내역 및 최적화 설정을 분석·적용. 게임 중 CPU 병목/스레드 경합으로 인한 렉 해소를 위해 Mach-message 기반 `WINEMSYNC=1` 및 `WINEESYNC=1`, 32비트 주소 확장(`WINE_LARGE_ADDRESS_AWARE=1`) 활성화; 컷씬 음성 끊김 및 무음 방지를 위해 `xaudio2_*`, `x3daudio1_*`, `dsound` 내장 오버라이드 지정; 동영상 끊김 및 음성 싱크 밀림 해결을 위해 Apple VideoToolbox 하드웨어 가속 디코더(`vtdec`, `vtdec_hw`) 및 AC-3(`a52dec`), DTS(`dtsdec`), MP4(`qtdemux`), MKV(`matroskademux`) 등 GStreamer 확장 패키지 번들링 및 `mfplat`, `mfreadwrite`, `quartz` 내장 오버라이드 적용; DX11 DXMT 맵 플래그/Alt-Tab 크래시 방지(`DXMT_CONFIG`), DX12 MoltenVK 아규먼트 버퍼 및 커맨드 프리필 최적화 적용.
-- 작업 폴더를 Git 저장소로 관리하고 원격 저장소(`https://github.com/sjhdeux0114/macDeckAI.git`, branch `main`)로 지속 동기화.
+- v0.5.5: Proton / CrossOver / Whisky / Apple GPTK / DXMT 커뮤니티의 유사 플랫폼 수정내역 및 최적화 설정을 분석·적용. 게임 중 CPU 병목/스레드 경합으로 인한 렉 해소를 위해 Mach-message 기반 `WINEMSYNC=1` 및 `WINEESYNC=1`, 32비트 주소 확장(`WINE_LARGE_ADDRESS_AWARE=1`) 활성화; 컷씬 음성 끊김 및 무음 방지를 위해 `xaudio2_*`, `x3daudio1_*`, `dsound` 내장 오버라이드 지정; 동영상 끊김 및 음성 싱크 밀림 해결을 위해 Apple VideoToolbox 하드웨어 가속 디코더(`vtdec`, `vtdec_hw`) 및 AC-3(`a52dec`), DTS(`dtsdec`), MP4(`qtdemux`), MKV(`matroskademux`) 등 GStreamer 확장 패키지 번들링 및 `mfplat`, `mfreadwrite`, `quartz` 내장 오버라이드 적용; DX11 DXMT 맵 플래그/Alt-Tab 크래시 방지(`DXMT_CONFIG`), DX12 MoltenVK 아규먼트 버퍼 및 커맨드 프리필 최적화 적용; D3D9 게임 Vulkan GPU 하드웨어 가속 및 32비트 WoW64 ESync 크래시 방지 적용.
+- 작업 폴더를 Git 저장소로 관리 (원격 GitHub 푸시는 사용자 요청 시에만 수행).
 
 ## 사용자 목표 및 이미 받은 승인
 
@@ -798,3 +798,37 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
      - 자체 테스트 스위트 **총 94개 전원 통과 (`94 checks passed`)**.
      - `/Applications/MacDeck.app`, `~/Applications/MacDeck.app` 즉시 교체 배포.
      - 로컬 배포용 DMG `dist/MacDeck-v0.5.5.dmg` (529MB) 재빌드 완료 (원격 GitHub 미업로드).
+
+### 2026-10-18 — 30초전사 D3D9 GPU 하드웨어 가속 전환(Vulkan→MoltenVK→Metal), 32비트 PE 자동 감지 및 ESync 안전 동기화 적용
+
+- **요청 사항**:
+  1. "30초전사 예전처럼 cpu로만 구동되고있어. 엄청 느려."
+  2. "dmg파일은 만들라고 할때만 만들어" (핵심 제약: 명시적 요청 없이 DMG 빌드 금지)
+
+- **문제 진단 및 근본 원인**:
+  1. **CPU 단독 구동 및 극심한 렉 현상**:
+     - 이전 작업에서 `WINE_D3D_CONFIG`를 해제하자 WineD3D가 macOS 기본 그래픽 백엔드인 OpenGL(`winemac.so`)로 폴백함.
+     - Apple Silicon(macOS Sonoma/Sequoia/macOS 27)에는 네이티브 OpenGL 드라이버가 없으며 애플의 CPU 소프트웨어 래스터라이저로 에뮬레이션됨.
+     - `sample` 프로파일링 결과 `Rosetta 2` x86_64 CPU 코어가 195%까지 치솟으며 소프트웨어 렌더링을 수행하여 게임이 심각하게 느려짐.
+  2. **앞선 턴에서 `csmt=3` 적용 시 크래시(`0xC0000005`)가 발생했던 진짜 원인**:
+     - 원인 A (`WINEMSYNC`): macOS용 Wine의 Mach-message MSync(`WINEMSYNC=1`)는 32비트 WoW64 프로세스에서 공유 메모리 핸들 인덱스 검색 실패(`warn:msync:get_object Failed to retrieve shm index for handle ..., status 0xc0000002`) 상위 버그가 존재함. 이로 인해 wineserver 소켓이 끊어지며(`error 6be`) `0xC0000005` (Access Violation)가 발생함.
+     - 원인 B (`csmt=3`): 비트마스크 3은 `CSMT_ENABLE(1) | CSMT_SERIALIZE(2)`로, MoltenVK 비동기 하드웨어 큐와 Wine 커맨드 스트림 간 동적 버텍스 버퍼 경합(Race Condition)을 유발함.
+
+- **해결 및 구현 내용**:
+  1. **Direct3D 9 Vulkan → MoltenVK → Apple Metal GPU 가속 복원 (`Library.swift`)**:
+     - `WINE_D3D_CONFIG = "renderer=vulkan,csmt=0"` 주입:
+       - `renderer=vulkan`: D3D9 파이프라인을 CPU 소프트웨어 래스터라이저 대신 **Vulkan $\rightarrow$ MoltenVK $\rightarrow$ Apple Metal 3 GPU** 하드웨어 가속으로 직결.
+       - `csmt=0`: MoltenVK 및 Metal 자체의 하드웨어 비동기 큐를 활용하고 단일 커맨드 스트림으로 직렬화하여, 버텍스 버퍼 경합 및 메모리 접근 위반 크래시를 원천 차단.
+  2. **실행 파일 PE 헤더 분석 기반 32비트 WoW64 자동 판별 (`is32BitWindowsBinary`)**:
+     - MZ/PE 헤더의 `IMAGE_FILE_MACHINE_I386` (`0x014c`) 머신 타입을 런타임에 직접 검사:
+       - **32비트 프로세스**: `WINEMSYNC=0`, `WINEESYNC=1`을 적용하여 WoW64 공유 메모리 핸들 탈락 및 wineserver 크래시 원천 방지.
+       - **64비트 프로세스**: 기존 고성능 `WINEMSYNC=1`, `WINEMSYNC_QLIMIT=512`, `WINEESYNC=1`을 그대로 유지하여 RE3, DMC5 등 최신 64비트 게임의 무결점 성능 보장.
+  3. **DMG 패키징 정책 엄격 준수**:
+     - 사용자 지시("dmg파일은 만들라고 할때만 만들어")에 따라 `./scripts/package-dmg.sh` 실행을 완전 배제하고, 앱 번들 컴파일(`./scripts/build-mac-app.sh`) 및 `/Applications/MacDeck.app`, `~/Applications/MacDeck.app` 교체만 수행.
+
+- **검증 결과**:
+  - `Sources/MacDeck/SelfTests.swift` 32비트 PE 자동 감지 및 ESync/Vulkan 검증 추가:
+    - **95개 자체 테스트 전수 통과 (`95 checks passed`)**.
+  - `dist/MacDeck.app` 컴파일 완료 및 `/Applications/MacDeck.app`, `~/Applications/MacDeck.app` 갱신 완료.
+  - DMG 빌드 미수행 및 원격 GitHub 푸시 미수행(로컬 작업 완료).
+

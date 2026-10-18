@@ -42,7 +42,17 @@ enum SelfTests {
                   && plan.environment["WINEDLLOVERRIDES"]?.contains("d3d9=b") == true
                   && plan.environment["WINEDLLOVERRIDES"]?.contains("d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b") == true, "default global DX11 Mode keeps builtin D3D12/Vulkan/D3D9, Unity/Unreal/CryEngine/EAC/NVAPI crash mitigations, and disables winedbg popups")
         try check(plan.environment["WINEMSYNC"] == "1" && plan.environment["WINEESYNC"] == "1" && plan.environment["WINE_LARGE_ADDRESS_AWARE"] == "1", "Windows launch plan enables Mach-message MSync, ESync, and large address awareness")
-        try check(plan.environment["WINE_D3D_CONFIG"] == nil, "WineD3D avoids experimental Vulkan overrides to ensure rock-solid 32-bit Direct3D 9 stability")
+        try check(plan.environment["WINE_D3D_CONFIG"] == "renderer=vulkan,csmt=0", "WineD3D configures Vulkan renderer with single-threaded command stream for Direct3D 9 GPU acceleration")
+        var pe32Data = Data(count: 0x80)
+        pe32Data[0] = 0x4d; pe32Data[1] = 0x5a
+        pe32Data[0x3c] = 0x40
+        pe32Data[0x40] = 0x50; pe32Data[0x41] = 0x45
+        pe32Data[0x44] = 0x4c; pe32Data[0x45] = 0x01
+        let fake32Exe = root.appendingPathComponent("game32.exe")
+        try pe32Data.write(to: fake32Exe)
+        let game32 = try Game.importing(fake32Exe)
+        let plan32 = try LaunchPlan.make(game: game32, wine: "/usr/bin/true", disk: disk)
+        try check(plan32.environment["WINEMSYNC"] == "0" && plan32.environment["WINEESYNC"] == "1", "32-bit Windows games use ESync to avoid WoW64 shared-memory desync")
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("xaudio2_7,xaudio2_8,xaudio2_9") == true && plan.environment["WINEDLLOVERRIDES"]?.contains("dsound=b") == true, "Windows launch plan overrides XAudio2 and DirectSound to Wine builtins")
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("mfplat,mfreadwrite,mf,mfmediaengine,winegstreamer=b;quartz,amstream=b") == true, "Windows launch plan overrides Media Foundation and DirectShow to Wine builtins")
         try check(plan.environment["DXMT_CONFIG"]?.contains("ignoreMapFlagNoWait=True") == true && plan.environment["DXMT_CONFIG"]?.contains("handleAltTab=True") == true, "DXMT frame pacing and Alt-Tab mitigations are configured")

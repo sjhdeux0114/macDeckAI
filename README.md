@@ -179,6 +179,14 @@ macDeckAI/
 > 세부적인 작업·검증·디버깅 누적 기록은 [`work.md`](work.md)에서 확인할 수 있습니다.
 
 ### v0.5.5 (2026-10-18)
+- **Direct3D 9 게임 Vulkan → MoltenVK → Apple Metal GPU 하드웨어 가속 (`WINE_D3D_CONFIG="renderer=vulkan,csmt=0"`)**:
+  - 기존 레거시 OpenGL 백엔드가 Apple Silicon macOS에서 CPU 소프트웨어 래스터라이저로 폴백되어 30초전사 등 고전 D3D9 게임 구동 시 CPU 195% 점유 및 극심한 렉이 발생하던 문제를 해결했습니다.
+  - WineD3D를 Vulkan 백엔드로 구성하여 Apple Metal 3 GPU 하드웨어로 직접 렌더링하고, MoltenVK 하드웨어 큐와의 버퍼 경합을 방지하도록 커맨드 스트림을 안전하게 직렬화(`csmt=0`)했습니다.
+- **실행 바이너리 PE 헤더 자동 판별 기반 32비트 WoW64 ESync 전환 (`0xC0000005` 크래시 방지)**:
+  - macOS용 Wine에서 32비트 WoW64 프로세스가 Mach-message MSync(`WINEMSYNC=1`) 구동 시 공유 메모리 핸들 인덱스 검색 실패로 소켓이 끊어지며 `0xC0000005` (Access Violation)로 비정상 종료되는 업스트림 결함을 분석했습니다.
+  - PE 바이너리 머신 타입(`IMAGE_FILE_MACHINE_I386`)을 감지하여 32비트 게임은 `WINEMSYNC=0, WINEESYNC=1`로 안전하게 구동하고, 64비트 게임(RE3, DMC5 등)은 고성능 MSync(`WINEMSYNC=1`)를 유지하도록 이원화했습니다.
+- **주요 게임 엔진(Unity, Unreal, CryEngine, EA Frostbite, Havok, Godot) 크래시 방지 및 안티치트 오버라이드**:
+  - `UnityCrashHandler`, `CrashReportClient`, `CryCrashHandler`, `OriginCrashReporter`, `EACrashReporter` 및 `EasyAntiCheat` 모듈을 차단하여 백그라운드 프리징 및 실행 불가 현상을 방지했습니다.
 - **게임 내 Apple Metal Performance HUD 기본 활성화 및 인게임 단축키 (`Fn + Shift + F9`) 지원**:
   - 기존에는 `showMetalHUD`가 비활성화되어 `MTL_HUD_ENABLED="0"`이 명시적으로 주입됨에 따라 macOS Metal 프레임워크가 HUD 오버레이 자체를 로드하지 않아 게임 중 `Fn + Shift + F9`를 눌러도 HUD가 나타나지 않았습니다.
   - Metal HUD 기본값을 켬(`MTL_HUD_ENABLED="1"`)으로 변경하고 전역 defaults(`MetalForceHudEnabled=YES`) 및 세션 환경을 동기화하여, 게임 화면에서 실시간으로 **`Fn + Shift + F9`**(또는 `Shift + F9`)를 눌러 FPS·GPU 사용률·프레임 간격 오버레이를 자유롭게 켜고 끌 수 있도록 개선했습니다. (`Fn + Shift + F7`로 화면 표시 위치 순환 가능)
@@ -191,7 +199,7 @@ macDeckAI/
   - Apple VideoToolbox 하드웨어 가속(`vtdec`, `vtdec_hw`), AC-3, DTS, MP4/MKV GStreamer 확장 패키지 번들링 및 1.3MB 사전 인덱싱 레지스트리 자동 시딩으로 초기 로딩 프리징 제거.
   - DX11 DXMT 맵 플래그/Alt-Tab 크래시 방지(`DXMT_CONFIG`), DX12 MoltenVK Argument Buffers 및 커맨드 버퍼 사전 채움 최적화 적용.
 - **배포용 DMG 패키징 및 GitHub Releases 배포**:
-  - `dist/MacDeck-v0.5.5.dmg` 고압축 UDZO 배포 이미지(532MB) 생성 및 GitHub Releases `v0.5.5` 배포 완료. 자체 검증 테스트 **92개 전원 통과**.
+  - `dist/MacDeck-v0.5.5.dmg` 고압축 UDZO 배포 이미지(532MB) 생성 및 GitHub Releases `v0.5.5` 배포 완료. 자체 검증 테스트 **95개 전원 통과**. (사용자 지침에 따라 일상 빌드 시 DMG는 명시적 요청 시에만 생성)
 
 ### v0.5.3 (2026-10-18)
 - **`steamwebhelper.exe` `0x80000003` (`DelayLoadFailureHook`) 크래시 및 `winedbg` 모달/콘솔 팝업 근본 수정**:

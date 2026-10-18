@@ -105,6 +105,18 @@ enum DirectX12Support {
         return exeURL.deletingLastPathComponent()
     }
 
+    static func is32BitWindowsBinary(at url: URL) -> Bool {
+        guard let file = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? file.close() }
+        guard let mz = try? file.read(upToCount: 0x40), mz.count >= 0x40, mz.prefix(2) == Data([0x4d, 0x5a]) else { return false }
+        let peOffset = Int(mz[0x3c]) | (Int(mz[0x3d]) << 8) | (Int(mz[0x3e]) << 16) | (Int(mz[0x3f]) << 24)
+        guard peOffset >= 0x40 && peOffset < 0x10000 else { return false }
+        try? file.seek(toOffset: UInt64(peOffset))
+        guard let peHeader = try? file.read(upToCount: 6), peHeader.count >= 6, peHeader.prefix(4) == Data([0x50, 0x45, 0x00, 0x00]) else { return false }
+        let machine = UInt16(peHeader[4]) | (UInt16(peHeader[5]) << 8)
+        return machine == 0x014c // IMAGE_FILE_MACHINE_I386
+    }
+
     static func executableDirectories(in root: URL) -> [URL] {
         guard FileManager.default.fileExists(atPath: root.path) else { return [] }
         var result: [URL] = [root.standardizedFileURL]
@@ -371,13 +383,19 @@ struct LaunchPlan {
                 }
                 environment["GST_REGISTRY_1_0"] = userRegistry.path
             }
-            environment["WINEMSYNC"] = "1"
+            let is32Bit = DirectX12Support.is32BitWindowsBinary(at: URL(fileURLWithPath: game.path))
+            if is32Bit {
+                environment["WINEMSYNC"] = "0"
+            } else {
+                environment["WINEMSYNC"] = "1"
+                environment["WINEMSYNC_QLIMIT"] = "512"
+            }
             environment["WINEESYNC"] = "1"
-            environment["WINEMSYNC_QLIMIT"] = "512"
             environment["WINE_LARGE_ADDRESS_AWARE"] = "1"
             environment["DXMT_LOG_LEVEL"] = "info"
             environment["DXMT_LOG_PATH"] = disk.logs.path
             environment["DXMT_CONFIG"] = "d3d11.ignoreMapFlagNoWait=True;dxgi.handleAltTab=True;d3d11.maxTessFactor=64"
+            environment["WINE_D3D_CONFIG"] = "renderer=vulkan,csmt=0"
             let hudEnabled = loaded?.showMetalHUD ?? true
             environment["MTL_HUD_ENABLED"] = hudEnabled ? "1" : "0"
             environment["SDL_RENDER_DRIVER"] = "direct3d11"
