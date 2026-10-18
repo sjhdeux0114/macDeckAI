@@ -31,7 +31,14 @@ enum SelfTests {
         let planDisabled = try LaunchPlan.make(game: game, wine: "/usr/bin/true", disk: disk)
         try check(planDisabled.environment["MTL_HUD_ENABLED"] == "0", "Metal HUD can be explicitly disabled in settings")
         try disk.save(decoded)
-        try check(plan.environment["WINEDLLOVERRIDES"]?.contains("winedbg.exe=d") == true && plan.environment["WINEDLLOVERRIDES"]?.contains("d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b") == true, "default global DX11 Mode keeps builtin D3D12/Vulkan for CEF DelayLoad and disables winedbg popups")
+        try check(plan.environment["WINEDLLOVERRIDES"]?.contains("winedbg.exe=d") == true
+                  && plan.environment["WINEDLLOVERRIDES"]?.contains("UnityCrashHandler64.exe=d") == true
+                  && plan.environment["WINEDLLOVERRIDES"]?.contains("CrashReportClient.exe=d") == true
+                  && plan.environment["WINEDLLOVERRIDES"]?.contains("easyanticheat_x64=d") == true
+                  && plan.environment["WINEDLLOVERRIDES"]?.contains("dinput8=b") == true
+                  && plan.environment["WINEDLLOVERRIDES"]?.contains("nvapi,nvapi64,nvngx=_nvngx=d") == true
+                  && plan.environment["WINEDLLOVERRIDES"]?.contains("d3d9=n,b") == true
+                  && plan.environment["WINEDLLOVERRIDES"]?.contains("d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b") == true, "default global DX11 Mode keeps builtin D3D12/Vulkan, native D3D9, Unity/Unreal/EAC/NVAPI crash mitigations, and disables winedbg popups")
         try check(plan.environment["WINEMSYNC"] == "1" && plan.environment["WINEESYNC"] == "1" && plan.environment["WINE_LARGE_ADDRESS_AWARE"] == "1", "Windows launch plan enables Mach-message MSync, ESync, and large address awareness")
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("xaudio2_7,xaudio2_8,xaudio2_9") == true && plan.environment["WINEDLLOVERRIDES"]?.contains("dsound=b") == true, "Windows launch plan overrides XAudio2 and DirectSound to Wine builtins")
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("mfplat,mfreadwrite,mf,mfmediaengine,winegstreamer=b;quartz,amstream=b") == true, "Windows launch plan overrides Media Foundation and DirectShow to Wine builtins")
@@ -226,6 +233,9 @@ enum SelfTests {
         let fakeD3D11 = fakeRuntime.appendingPathComponent("lib/wine/x86_64-windows/d3d11.dll")
         let d3d11Bytes = Data([0x4d, 0x5a]) + Data("dxmt-d3d11-patched".utf8)
         try d3d11Bytes.write(to: fakeD3D11)
+        let fakeD3D9 = fakeRuntime.appendingPathComponent("lib/wine/x86_64-windows/d3d9.dll")
+        let d3d9Bytes = Data([0x4d, 0x5a]) + Data("dxvk-d3d9-patched".utf8)
+        try d3d9Bytes.write(to: fakeD3D9)
         let fakeMedia = fakeRuntime.appendingPathComponent("Media")
         let fakeGstDylib = fakeMedia.appendingPathComponent("lib/libgstreamer-1.0.0.dylib")
         let fakeBundledReg = fakeMedia.appendingPathComponent("gst-registry.bin")
@@ -237,6 +247,7 @@ enum SelfTests {
         DirectX12Support.applyGlobal(mode: .dxmt, wine: fakeWineBin.path, games: [dx12Game], disk: disk)
         try check((try? Data(contentsOf: activeRuntimeDXGI)) == dxmtDXGIBytes && (try? Data(contentsOf: steamSys32.appendingPathComponent("dxgi.dll"))) == dxmtDXGIBytes, "Global DX11 Mode switches runtime and prefix system32 dxgi.dll to DXMT")
         try check((try? Data(contentsOf: steamSys32.appendingPathComponent("d3d11.dll"))) == d3d11Bytes, "Global sync keeps prefix system32 d3d11.dll synchronized with runtime")
+        try check((try? Data(contentsOf: steamSys32.appendingPathComponent("d3d9.dll"))) == d3d9Bytes, "Global sync keeps prefix system32 d3d9.dll synchronized with runtime")
         try check(!FileManager.default.fileExists(atPath: deployedDXGI.path), "Global mode cleans up managed Wine dxgi.dll from game directory")
         try check((try? String(contentsOf: configINI)).map { $0.contains("Capability=DirectX11") && $0.contains("TargetPlatform=DirectX11") } == true, "Global DX11 Mode updates game config INI to DirectX11")
         DirectX12Support.applyGlobal(mode: .d3d12, wine: fakeWineBin.path, games: [dx12Game], disk: disk)
@@ -246,7 +257,7 @@ enum SelfTests {
         let dx12Plan = try LaunchPlan.make(game: dx12Game, wine: fakeWineBin.path, disk: disk)
         try check(dx12Plan.environment["MVK_CONFIG_RESUME_LOST_DEVICE"] == "0", "DX12 surfaces GPU device loss instead of forcing resume after timeout")
         try check(dx12Plan.environment["MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS"] == "1" && dx12Plan.environment["MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS"] == "3", "DX12 enables MoltenVK Metal argument buffers and prefilled command buffers")
-        try check(dx12Plan.environment["VKD3D_FEATURE_LEVEL"] == "12_1" && dx12Plan.environment["VKD3D_CONFIG"] == "no_upload_hlist", "DX12 configures VKD3D feature level 12.1 and descriptor optimizations")
+        try check(dx12Plan.environment["VKD3D_FEATURE_LEVEL"] == "12_1" && dx12Plan.environment["VKD3D_CONFIG"] == "no_upload_hlist,virtual_heaps", "DX12 configures VKD3D feature level 12.1 and virtual heaps for UE4/UE5 and Elden Ring")
         try check(dx12Plan.environment["WINEDLLOVERRIDES"]?.contains("dxgi,d3d12,d3d12core,vulkan-1,winevulkan") == true, "Global DX12 Mode enables D3D12 and Vulkan overrides in LaunchPlan")
         let userReg = disk.logs.appendingPathComponent("gst-registry-x86_64.bin")
         try check((try? Data(contentsOf: userReg)) == bundledRegBytes, "LaunchPlan pre-seeds user GStreamer registry from bundled cache to eliminate cold start scanning")

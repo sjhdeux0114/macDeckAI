@@ -360,6 +360,15 @@ macDeckAI/
 - **MacDeck 전용 3D Apple-스타일 공식 앱 아이콘 (`AppIcon.icns`) 도입**:
   - Apple macOS 정밀 스퀴클(Superellipse) 규격을 준수한 고해상도(16×16 ~ 1024×1024) 전용 아이콘 제작 및 번들 탑재.
   - macOS Dock, Launchpad, Cmd+Tab 앱 전환기 및 MacDeck 사이드바에 통일된 아이콘 브랜딩 적용.
-- 자체 검증 테스트 총 **92개 통과** 및 strict 코드 서명 검증 완료.
+- **DirectX 9 (D3D9) Metal 하드웨어 가속 (DXVK 1.10.3 + MoltenVK) 탑재**:
+  - 30초전사(Half Minute Hero) 등 32비트/64비트 DirectX 9 고전 명작 게임이 레거시 OpenGL CPU 에뮬레이션(CPU 195% 폭주)으로 빠지던 문제를 해결하기 위해, macOS 최적화 **DXVK 1.10.3 (`d3d9.dll`)**을 번들링하여 **Vulkan $\rightarrow$ MoltenVK $\rightarrow$ Apple Metal GPU** 하드웨어 가속 파이프라인 구축.
+  - DirectX 9 게임에서도 **Metal Performance HUD 정상 표시** 및 60 FPS 무손실 구동 지원.
+- **주요 게임 및 상용 게임 엔진(Unity · Unreal Engine · Cocos2d) 종합 충돌 방지**:
+  - **Unity 엔진**: `UnityCrashHandler32/64.exe` 비활성화로 크래시 핸들러 무한 루프 및 창 프리징 차단.
+  - **Unreal Engine 4 & 5 (호그와트 레거시 등)**: `CrashReportClient.exe` 소켓 IPC 블로킹 차단 및 DX12 가상 디스크립터 힙(`VKD3D_CONFIG=virtual_heaps`) 지원으로 대규모 텍스처 메모리 크래시 방지.
+  - **FromSoftware (엘든링 등)**: `easyanticheat_x64=d`를 통해 Easy Anti-Cheat 커널 드라이버 로드 실패에 의한 초기 시동 크래시 방지.
+  - **Rockstar (GTA V 등) & 2D 엔진 (Cocos2d 등)**: DirectInput 8(`dinput8=b`), 런타임 셰이더 컴파일러(`d3dcompiler_43/47=b`), 및 창 포커스 이탈 시 강제 최소화 방지(`SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS=0`) 적용.
+  - **Apple Silicon Metal 특화 DLSS 충돌 방지**: 비호환 NVIDIA 라이브러리 쿼리 충돌(`nvngx=_nvngx=d`)을 차단하여 FSR/XeSS 정상 폴백 유도.
+- 자체 검증 테스트 총 **93개 통과** (`93 checks passed`) 및 strict 코드 서명 검증 완료.
 
 
