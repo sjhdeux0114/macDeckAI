@@ -252,7 +252,7 @@ enum DirectX12Support {
             + "xaudio2_0,xaudio2_1,xaudio2_2,xaudio2_3,xaudio2_4,xaudio2_5,xaudio2_6,xaudio2_7,xaudio2_8,xaudio2_9,x3daudio1_0,x3daudio1_1,x3daudio1_2,x3daudio1_3,x3daudio1_4,x3daudio1_5,x3daudio1_6,x3daudio1_7=b;dsound=b;"
             + "mfplat,mfreadwrite,mf,mfmediaengine,winegstreamer=b;quartz,amstream=b;"
             + "nvapi,nvapi64,nvngx=_nvngx=d;"
-            + "d3d9=n,b;"
+            + "d3d9=b;"
         switch mode {
         case .dxmt:
             return common + "d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b"
@@ -377,8 +377,7 @@ struct LaunchPlan {
             environment["DXMT_LOG_LEVEL"] = "info"
             environment["DXMT_LOG_PATH"] = disk.logs.path
             environment["DXMT_CONFIG"] = "d3d11.ignoreMapFlagNoWait=True;dxgi.handleAltTab=True;d3d11.maxTessFactor=64"
-            environment["DXVK_LOG_LEVEL"] = "none"
-            environment["DXVK_LOG_PATH"] = disk.logs.path
+            environment["WINE_D3D_CONFIG"] = "renderer=vulkan,csmt=3"
             let hudEnabled = loaded?.showMetalHUD ?? true
             environment["MTL_HUD_ENABLED"] = hudEnabled ? "1" : "0"
             environment["SDL_RENDER_DRIVER"] = "direct3d11"

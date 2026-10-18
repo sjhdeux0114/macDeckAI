@@ -14,7 +14,6 @@ artifacts = [
     ("wine-steam10.tar.xz", "https://github.com/Sikarugir-App/Engines/releases/download/v1.0/WS12WineSikarugir10.0_8.tar.xz", "2a6bcf2a3bf13cddf825599b6bc1e3659cbf71e1282c6d77141a92f6ac8d4c68"),
     ("wine.tar.xz", "https://github.com/Gcenx/macOS_Wine_builds/releases/download/11.0_1/wine-stable-11.0_1-osx64.tar.xz", "b50dc50ec7f41d58b115a6b685d4d1315ba3c797bd3aa0f49213f2703cb82388"),
     ("dxmt.tar.gz", "https://github.com/3Shain/dxmt/releases/download/v0.80/dxmt-v0.80-builtin.tar.gz", "8f260e36b5739e68f3bad613381441385c4dc7b85b78ba8de653d5a6a264529d"),
-    ("dxvk-1.10.3.tar.gz", "https://github.com/doitsujin/dxvk/releases/download/v1.10.3/dxvk-1.10.3.tar.gz", "8d1a3c912761b450c879f98478ae64f6f6639e40ce6848170a0f6b8596fd53c6"),
     ("brogue.zip", "https://github.com/tmewett/BrogueCE/releases/download/v1.15.1/BrogueCE-1.15.1-windows-x86_64.zip", "29dcbae1791156a040c9125d0a28ae97d67a09b22a52266af1c65e2918bede5f")
 ]
 for name, url, digest in artifacts:
@@ -31,7 +30,6 @@ for name, directory, marker in [
     ("wine-steam10.tar.xz", "wine-steam10", "wswine.bundle/bin/wine"),
     ("wine.tar.xz", "wine", "Wine Stable.app/Contents/Resources/wine/lib/libinotify.0.dylib"),
     ("dxmt.tar.gz", "dxmt", "v0.80/x86_64-windows/d3d11.dll"),
-    ("dxvk-1.10.3.tar.gz", "dxvk-1.10.3", "dxvk-1.10.3/x32/d3d9.dll"),
     ("brogue.zip", "games", "BrogueCE-windows/brogue.exe")
 ]:
     destination = cache / directory
@@ -81,12 +79,6 @@ for directory in ["x86_64-unix", "x86_64-windows", "i386-windows"]:
                 dxmt_dxgi_dir = runtime / "lib/wine/dxgi-dxmt" / directory
                 dxmt_dxgi_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, dxmt_dxgi_dir / "dxgi.dll")
-
-dxvk = cache / "dxvk-1.10.3"
-for src_dir, dst_dir in [("x32", "i386-windows"), ("x64", "x86_64-windows")]:
-    d3d9_src = dxvk / src_dir / "d3d9.dll"
-    if d3d9_src.exists():
-        shutil.copy2(d3d9_src, runtime / "lib/wine" / dst_dir / "d3d9.dll")
 
 wine_bin = runtime / "bin/wine"
 if wine_bin.exists():

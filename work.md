@@ -740,6 +740,29 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
      - `dist/MacDeck-v0.5.5.dmg` (523MB) 로컬 재패키징 완료.
      - `/Applications/MacDeck.app`, `~/Applications/MacDeck.app`, 및 Steam Prefix 내 `d3d9.dll` 전수 갱신 완료.
 
+### 2026-10-18 — 30초전사 `D3DDevice creation failed` 오류 해결 및 WineD3D Vulkan/CSMT 멀티스레드 가속 전환
+
+- **요청 사항**:
+  - "30초 전사 실행 안됨" (스크린샷: `D3DDeviceの作成に失敗しました` / `D3DDevice 궡 밪뀬 귁 궭` 팝업 발생)
+
+- **원인 분석**:
+  1. generic upstream DXVK 1.10.3의 `d3d9.dll`은 Direct3D 9 고정 기능(Fixed-function) 파이프라인 및 특정 Vulkan 확장 기능을 요구함.
+  2. Apple Silicon의 macOS MoltenVK는 해당 32비트 Vulkan 확장 기능 전체를 지원하지 못하여 `IDirect3D9::CreateDevice` 호출 단계에서 어댑터 생성 실패를 반환, 게임 시동 시 `D3DDevice 생성 실패` 에러 창이 발생함. (CrossOver 및 Gcenx DXVK-macOS 릴리스에서도 같은 이유로 `d3d9.dll` 번들링이 배제된 바 있음)
+
+- **해결 내용**:
+  1. **DXVK d3d9 제거 및 Wine 공식 내장 `wined3d.dll` + `d3d9.dll` 원복**:
+     - `scripts/prepare-metal-runtime.py`: 불완전한 DXVK d3d9 복사 단계 제거 및 공식 Wine builtin `d3d9.dll` 유지.
+     - `Sources/MacDeck/Library.swift`: `WINEDLLOVERRIDES`를 `d3d9=b`로 설정하여 Wine 표준 검증 DLL 로드 보장.
+  2. **WineD3D 네이티브 멀티스레드 Vulkan 가속 활성화**:
+     - `LaunchPlan.make`에 **`WINE_D3D_CONFIG="renderer=vulkan,csmt=3"`** 주입:
+       - `renderer=vulkan`: WineD3D 렌더러를 레거시 CPU OpenGL 대신 **Vulkan $\rightarrow$ MoltenVK $\rightarrow$ Apple Metal 3 GPU** 파이프라인으로 전환.
+       - `csmt=3`: Command Stream Multithreading을 3스레드 비동기 렌더링으로 가동하여 메인 스레드 CPU 195% 스핀락 렉을 완전 해소.
+  3. **실제 검증**:
+     - `HMH.exe` 실행 시 `Using the Vulkan renderer`, `Setting multithreaded command stream to 0x3`, `[mvk-info] MoltenVK version 1.4.1` 로그와 함께 D3DDevice 오류 없이 즉시 정상 시동 확인.
+     - 자체 테스트 스위트 **총 94개 전원 통과 (`94 checks passed`)**.
+     - `/Applications/MacDeck.app`, `~/Applications/MacDeck.app`, 및 Steam Prefix 내 `d3d9.dll` 전수 갱신 완료.
+     - 로컬 배포용 `dist/MacDeck-v0.5.5.dmg` (534MB) 재패키징 완료 (원격 GitHub 미업로드).
+
 
 
 
