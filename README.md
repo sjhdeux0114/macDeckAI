@@ -176,6 +176,13 @@ macDeckAI/
 
 > 세부적인 작업·검증·디버깅 누적 기록은 [`work.md`](work.md)에서 확인할 수 있습니다.
 
+### v0.5.3 (2026-10-18)
+- **`steamwebhelper.exe` `0x80000003` (`DelayLoadFailureHook`) 크래시 및 `winedbg` 모달/콘솔 팝업 근본 수정**:
+  - **원인 규명**: `libcef.dll`의 RVA `0x59ef905`(Chromium `DelayLoadFailureHook`)에서 지연 로드 대상(`dxgi.dll`, `d3d12.dll`) 로드 실패 시 즉시 `int3`(`0x80000003`) 예외가 발생하는 것을 확인했습니다. `Bottles/Steam/drive_c/windows/system32/dxgi.dll` 누락 및 `d3d12,d3d12core=` 비활성화 오버라이드가 결합되어 `steamwebhelper.exe`가 충돌하고, Wine `winedbg --auto`가 모달 에러 창 또는 콘솔 창을 반복 실행하며 공유 메모리(`SteamChrome_MasterStream`)를 잠그던 문제를 해결했습니다.
+  - **Prefix `system32` / `syswow64` 자동 동기화 (`DirectX12Support.syncPrefix`)**: 전역 그래픽 모드 적용 시 런타임뿐만 아니라 모든 Wine prefix(`Bottles/*`) 내부의 `drive_c/windows/system32/dxgi.dll` 및 `drive_c/windows/syswow64/dxgi.dll`, 코어 그래픽 DLL(`d3d11.dll`, `d3d10core.dll`, `d3d12.dll`, `d3d12core.dll`, `winemetal.dll`), `AeDebug` 레지스트리를 자동 복구·동기화합니다.
+  - **CEF 호환 DLL 오버라이드 및 `winedbg.exe=d` 적용**: `d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b`를 유지하여 CEF 지연 로드가 실패하지 않게 하면서 DXMT `dxgi.dll`과 `.ini` 설정으로 DX11 경로를 유도하고, `winedbg.exe=d`로 불필요한 크래시 모달/터미널 창 팝업을 차단했습니다.
+  - **Steam 종료 시 잔존 프로세스 정리 (`wineserver -k`) 및 기동 경합 방지**: 그래픽 모드 전환이나 런타임 업데이트 시 Steam을 먼저 정상 종료하고 `wineserver -k`로 잔존 프로세스를 정리한 뒤 파일을 교체하도록 개선했습니다.
+
 ### v0.5.2 (2026-10-18)
 - **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 확인 및 자동 업데이트 (`RuntimeUpdater.swift`)**:
   - `런타임` 설정 탭에 **런타임 구성요소 자동 업데이트** 패널을 추가하여 **MoltenVK**(`KhronosGroup/MoltenVK`, `v1.4.1` → `v1.4.2`), **DXMT**(`3Shain/dxmt`, `v0.80`), **Wine Engine**(`Sikarugir-App/Engines`, `v10.0_8`)의 공식 GitHub Releases 최신 버전을 실시간으로 확인하고 업데이트할 수 있습니다.

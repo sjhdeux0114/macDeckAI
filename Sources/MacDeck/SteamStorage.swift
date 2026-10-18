@@ -146,6 +146,23 @@ struct SteamStorage {
         guard text.contains("\",\"") else { throw DeckError.message("Windows 프로세스 상태를 확인하지 못해 설정을 보존했습니다.") }
         return text.lowercased().components(separatedBy: .newlines).contains { $0.hasPrefix("\"steam.exe\",") }
     }
+    func killPrefixProcesses(wine: String) {
+        let server = URL(fileURLWithPath: wine).resolvingSymlinksInPath()
+            .deletingLastPathComponent().appendingPathComponent("wineserver")
+        guard FileManager.default.isExecutableFile(atPath: server.path) else { return }
+        let process = Process()
+        process.executableURL = server
+        process.arguments = ["-k"]
+        var env = ProcessInfo.processInfo.environment
+        env["WINEPREFIX"] = client.prefix.path
+        env["DYLD_FALLBACK_LIBRARY_PATH"] = server.deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("lib").path
+        process.environment = env
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        process.waitUntilExit()
+    }
     func stopAndWait(wine: String) async throws {
         guard try await isRunning(wine: wine) else { return }
         guard let executable = client.executable else { return }
@@ -155,6 +172,7 @@ struct SteamStorage {
             guard Date() < deadline else { throw DeckError.message("Steam이 아직 종료되지 않았습니다. 게임을 저장하고 종료한 뒤 다시 시도해 주세요.") }
             try await Task.sleep(nanoseconds: 500_000_000)
         }
+        killPrefixProcesses(wine: wine)
     }
     func unlink(_ storage: ExternalLibrary) throws {
         let link = client.prefix.appendingPathComponent("dosdevices/" + storage.drive + ":")

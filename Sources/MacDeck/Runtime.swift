@@ -123,7 +123,7 @@ final class DeckModel: ObservableObject {
         }
         selected = library.games.first?.id
         runtime = Runtime.inspect(custom: library.winePath)
-        DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: library.games)
+        DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: library.games, disk: disk)
         reloadRuntimeComponents()
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -154,7 +154,7 @@ final class DeckModel: ObservableObject {
         do {
             let game = try Game.importing(url)
             if let existing = library.games.first(where: { $0.path == game.path }) { selected = existing.id; page = "library"; return }
-            DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: [game])
+            DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: [game], disk: disk)
             var data = library
             data.games.append(game)
             try commit(data)
@@ -176,7 +176,7 @@ final class DeckModel: ObservableObject {
     func saveGame(_ game: Game) {
         do {
             guard let index = library.games.firstIndex(where: { $0.id == game.id }) else { return }
-            DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: [game])
+            DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: [game], disk: disk)
             var data = library
             data.games[index] = game
             try commit(data)
@@ -505,15 +505,14 @@ final class DeckModel: ObservableObject {
         guard !didStart else { return }
         didStart = true
         let winePath = runtime.path ?? Runtime.inspect(custom: library.winePath).path
-        DirectX12Support.applyGlobal(mode: graphicsBackend, wine: winePath, games: library.games)
+        DirectX12Support.applyGlobal(mode: graphicsBackend, wine: winePath, games: library.games, disk: disk)
         reloadRuntimeComponents()
         reconnectExternalLibraries(steamRunning: false)
         refreshSteamGames(silent: true)
-        if autoUpdateRuntime {
-            checkRuntimeUpdates(autoInstall: true)
-        } else {
-            checkRuntimeUpdates(autoInstall: false)
-        }
+        let willStartSteam = CommandLine.arguments.contains("--setup-steam")
+            || CommandLine.arguments.contains("--steam")
+            || (steamInstalled && (library.startSteamOnLaunch ?? true))
+        checkRuntimeUpdates(autoInstall: autoUpdateRuntime && !willStartSteam)
         if CommandLine.arguments.contains("--setup-steam") { installSteam() }
         else if CommandLine.arguments.contains("--steam") || (steamInstalled && (library.startSteamOnLaunch ?? true)) { launchSteam() }
     }
@@ -609,6 +608,12 @@ final class DeckModel: ObservableObject {
             defer { updatingComponents = false }
             do {
                 let currentWine = runtime.path ?? Runtime.inspect(custom: library.winePath).path
+                let service = SteamStorage(client: SteamClient(disk: disk))
+                var restartSteam = false
+                if steamInstalled, let currentWine, (try? await service.isRunning(wine: currentWine)) == true {
+                    restartSteam = true
+                    try? await service.stopAndWait(wine: currentWine)
+                }
                 let ensured = try RuntimeUpdater.ensureWritableRuntime(currentWinePath: currentWine, disk: disk)
                 if let newWinePath = ensured.updatedWinePath, newWinePath != library.winePath {
                     var data = library
@@ -623,12 +628,15 @@ final class DeckModel: ObservableObject {
                     runtimeRoot: ensured.runtimeRoot,
                     graphicsMode: graphicsBackend
                 )
+                let finalWine = runtime.path ?? Runtime.inspect(custom: library.winePath).path
+                DirectX12Support.applyGlobal(mode: graphicsBackend, wine: finalWine, games: library.games, disk: disk)
                 reloadRuntimeComponents()
                 if let newIdx = runtimeComponents.firstIndex(where: { $0.kind == kind }) {
                     runtimeComponents[newIdx].updating = false
                     runtimeComponents[newIdx].statusMessage = "업데이트 완료 (\(latest))"
                 }
                 updateBannerMessage = "\(kind.title)을(를) \(latest) 버전으로 업데이트했습니다."
+                if restartSteam { launchSteam() }
             } catch {
                 if let newIdx = runtimeComponents.firstIndex(where: { $0.kind == kind }) {
                     runtimeComponents[newIdx].updating = false
@@ -649,8 +657,14 @@ final class DeckModel: ObservableObject {
         Task {
             defer { updatingComponents = false }
             var updatedNames: [String] = []
+            var restartSteam = false
             do {
                 let currentWine = runtime.path ?? Runtime.inspect(custom: library.winePath).path
+                let service = SteamStorage(client: SteamClient(disk: disk))
+                if steamInstalled, let currentWine, (try? await service.isRunning(wine: currentWine)) == true {
+                    restartSteam = true
+                    try? await service.stopAndWait(wine: currentWine)
+                }
                 let ensured = try RuntimeUpdater.ensureWritableRuntime(currentWinePath: currentWine, disk: disk)
                 if let newWinePath = ensured.updatedWinePath, newWinePath != library.winePath {
                     var data = library
@@ -687,6 +701,9 @@ final class DeckModel: ObservableObject {
                         }
                     }
                 }
+                let finalWine = runtime.path ?? Runtime.inspect(custom: library.winePath).path
+                DirectX12Support.applyGlobal(mode: graphicsBackend, wine: finalWine, games: library.games, disk: disk)
+                if restartSteam { launchSteam() }
             } catch {
                 updateBannerMessage = "런타임 업데이트 준비 실패: \(error.localizedDescription)"
                 return
@@ -705,15 +722,22 @@ final class DeckModel: ObservableObject {
             for index in data.games.indices { data.games[index].graphicsBackend = nil }
             try commit(data)
             let winePath = runtime.path ?? Runtime.inspect(custom: library.winePath).path
-            DirectX12Support.applyGlobal(mode: mode, wine: winePath, games: data.games)
-            steamProgress = "전역 그래픽 모드를 \(mode.shortLabel)로 전환했습니다."
-            guard steamInstalled, let winePath else { return }
+            guard steamInstalled, let winePath else {
+                DirectX12Support.applyGlobal(mode: mode, wine: winePath, games: data.games, disk: disk)
+                steamProgress = "전역 그래픽 모드를 \(mode.shortLabel)로 전환했습니다."
+                return
+            }
+            let gamesSnapshot = data.games
             Task {
                 let service = SteamStorage(client: SteamClient(disk: disk))
-                if (try? await service.isRunning(wine: winePath)) == true {
+                let running = (try? await service.isRunning(wine: winePath)) == true
+                if running {
                     steamProgress = "\(mode.shortLabel) 적용을 위해 Steam을 재시작하고 있습니다…"
                     try? await service.stopAndWait(wine: winePath)
-                    steamProgress = "전역 그래픽 모드(\(mode.shortLabel))가 모든 게임과 Steam에 적용되었습니다."
+                }
+                DirectX12Support.applyGlobal(mode: mode, wine: winePath, games: gamesSnapshot, disk: disk)
+                steamProgress = "전역 그래픽 모드(\(mode.shortLabel))가 모든 게임과 Steam에 적용되었습니다."
+                if running {
                     launchSteam()
                 }
             }
@@ -755,7 +779,7 @@ final class DeckModel: ObservableObject {
                     data.games[index] = game
                 } else { data.games.append(game) }
             }
-            DirectX12Support.applyGlobal(mode: graphicsBackend, wine: winePath, games: data.games)
+            DirectX12Support.applyGlobal(mode: graphicsBackend, wine: winePath, games: data.games, disk: disk)
             if data.games != library.games { try commit(data) }
             if !silent { steamProgress = "설치된 Steam 게임 \(found.count)개를 확인했습니다. 전체 보유 라이브러리는 Steam에서 볼 수 있습니다." }
         } catch { if !silent { message = error.localizedDescription } }

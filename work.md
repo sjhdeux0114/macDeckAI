@@ -5,7 +5,7 @@
 ## 현재 상태 — 2026-10-18
 
 - 프로젝트: `/Users/sjhdeux/Documents/macdeck`
-- 현재 앱: **MacDeck 0.5.2**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
+- 현재 앱: **MacDeck 0.5.3**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
 - 빌드 결과: `dist/MacDeck.app`
 - 설치된 앱: `/Users/sjhdeux/Applications/MacDeck.app`
 - 실제 호스트: Apple M5, 메모리 24 GiB, macOS 27.0.1. 최소 배포 대상 macOS 13은 빌드 설정이며 다른 기기에서 검증한 것은 아니다.
@@ -16,6 +16,7 @@
 - **Direct3D 12 3D 게임(Resident Evil 3, `re3.exe`) 실행 및 Apple M5 Metal 3(VKD3D 1.14 → winevulkan → MoltenVK) 전체화면(`2704x1756`, `38.45 FPS`) 렌더링 확인 성공** (기본 전역 모드는 **DX11 Mode**이며 설정에서 전환 가능).
 - Bluetooth DualShock 4를 Apple GameController 및 Wine과 같은 SDL2에서 인식하고 실제 버튼/축 변화 확인. Windows/Steam/게임 내부 조작은 아직 별도 검증 필요.
 - v0.5.2: `런타임` 설정 탭에 **MoltenVK (`KhronosGroup/MoltenVK`) · DXMT (`3Shain/dxmt`) · Wine Engine (`Sikarugir-App/Engines`)** 최신 릴리스 확인 및 **자동 업데이트** 기능(`RuntimeUpdater.swift`) 추가. 앱 시작 시 자동 확인 및 SHA-256 무결성 검증·아키텍처(`x86_64`) 슬라이스 검증·백업 후 원자적 교체·ad-hoc 재서명 지원.
+- v0.5.3: `steamwebhelper.exe` 시작 직후 `0x80000003` (`libcef.dll+0x59ef905`, Chromium `DelayLoadFailureHook`) 예외 및 `winedbg` 모달/콘솔 창이 반복 발생하던 문제를 근본 해결. Wine prefix 내부 `drive_c/windows/{system32,syswow64}/dxgi.dll` 동기화(`DirectX12Support.syncPrefix`), CEF Delay-Load 호환 `d3d12,d3d12core,vulkan-1,winevulkan=b` 오버라이드 유지, `winedbg.exe=d` 및 `AeDebug` 자동 복구, Steam 기동 중 런타임 덮어쓰기 경합 제거 적용 후 Steam Big Picture(`BrowserReady` 및 `SP BPM_uid0`) 무오류 정상 기동 검증 완료.
 - 작업 폴더를 Git 저장소로 초기화하고 원격 저장소(`https://github.com/sjhdeux0114/macDeckAI.git`, branch `main`)로 커밋 및 푸시 완료.
 
 ## 사용자 목표 및 이미 받은 승인
@@ -357,4 +358,29 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
     - 앱 버전을 `0.5.2` (`CFBundleVersion = 8`)로 갱신하고, `RuntimeUpdater` 버전 비교·GitHub Release JSON 파싱(MoltenVK/DXMT/Wine)·SHA-256 무결성 검증·Mach-O `x86_64` 검증 및 로컬 아카이브 설치 테스트 5종을 추가하여 총 **74개 자체 검사**로 확장.
 - 실제 실행한 검증과 결과:
   - `bash scripts/build-mac-app.sh && dist/MacDeck.app/Contents/MacOS/MacDeck --self-test && codesign --verify --strict dist/MacDeck.app` 실행 → **74 checks passed** (`evidence/v052-runtime-updater-tests.log`), 서명 검증 통과.
+
+### 2026-10-18 — `steamwebhelper.exe` `0x80000003` (`DelayLoadFailureHook`) 크래시 및 `winedbg` 모달/콘솔 반복 팝업 근본 수정 (v0.5.3)
+
+- 사용자 요청: "오류가 계속 발생해" / "에러는 없어졌는데 터미널만 계속 켜졌다가 꺼지면서 스팀앱이 실행이 안돼" / "에러 나" (`Program Error: The program steamwebhelper.exe has encountered a serious problem and needs to close` 및 `Unhandled exception 0x80000003 ... at address 00006FFFF24CF905`)
+- 원인 분석 (`WINEDEBUG=+seh,+loaddll,+module` 및 `libcef.dll` 디스어셈블리):
+  1. **Chromium `DelayLoadFailureHook` (`libcef.dll+0x59ef905`, `0x80000003`) 발생 원인**:
+     - `libcef.dll`의 RVA `0x59ef7d0`~`0x59ef905`를 역어셈블한 결과, 지연 로드(Delay-Load) 대상 DLL(`dxgi.dll`, `d3d12.dll` 등) 로드 실패 시 `"bthprops.cpl"`을 제외한 모든 모듈에 대해 `DelayLoad-ModuleName` 크래시 키를 기록하고 즉시 `int3` (`0x80000003`, `EXCEPTION_BREAKPOINT`)를 발생시키는 Chromium `DelayLoadFailureHook`임을 확인.
+     - `WINEDEBUG=+module` 추적 결과, `Bottles/Steam/drive_c/windows/system32/dxgi.dll` 파일이 누락되어 `0274:warn:module:load_dll Failed to load module L"dxgi.dll"; status=c0000135` (`STATUS_DLL_NOT_FOUND`)가 발생했고, 또한 v0.5.1의 DX11 Mode `WINEDLLOVERRIDES`에서 `d3d12,d3d12core=`로 `d3d12.dll`을 비활성화하고 `vulkan-1,winevulkan=b`를 누락시켜 `steamwebhelper.exe`(`libcef.dll`)가 시작 직후 `0x80000003`으로 충돌했음.
+  2. **`winedbg --auto` 모달 창 / 콘솔 창 반복 팝업 및 공유 메모리 잠금**:
+     - 예외 발생 시 Wine `UnhandledExceptionFilter`가 `AeDebug` 레지스트리에 따라 `winedbg --auto <pid> <event>`를 실행하여, `ShowCrashDialog=1`이면 `Program Error` 모달 창으로 `steamwebhelper.exe` 프로세스를 일시정지 상태로 붙잡아 두고(`SteamChrome_MasterStream_spid32_mem` 공유 메모리 잠금 유발), `ShowCrashDialog=0`이면 10초마다 콘솔(`conhost.exe`) 창을 띄우며 죽이고, `AeDebug\Auto="0"`이면 `"Do you wish to debug it? [Yes] [No]"` 대화상자를 표시했음.
+  3. **런타임 파일 교체와 Steam 기동 간 경합**:
+     - 앱 시작(`start()`) 시 `checkRuntimeUpdates(autoInstall: true)`가 `launchSteam()`과 동시에 실행되거나, `setGraphicsBackend(_:)`에서 Steam 종료 전에 `dxgi.dll`을 먼저 덮어쓰는 경합 가능성 확인.
+- 변경 파일 및 내용:
+  - `Sources/MacDeck/Library.swift`:
+    - `DirectX12Support.syncPrefix(_:mode:runtimeRoot:)`: 모든 Wine prefix(`Bottles/*` 및 게임별 prefix)의 `drive_c/windows/system32/dxgi.dll`과 `drive_c/windows/syswow64/dxgi.dll`을 현재 전역 그래픽 모드(`dxgi-dxmt` 또는 `dxgi-d3d12`)와 항상 동기화하고, 누락된 코어 그래픽 DLL(`d3d11.dll`, `d3d10core.dll`, `d3d12.dll`, `d3d12core.dll`, `winemetal.dll`) 및 `system.reg`의 `AeDebug` `"Auto"="1"` 설정을 자동 복구.
+    - `DirectX12Support.dllOverrides(for:)`: DX11/DX12 양쪽 모드 모두 `winedbg.exe=d`를 포함해 디버거 모달/콘솔 팝업을 원천 차단하고, `d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b`를 유지하여 `libcef.dll`의 Delay-Load가 절대 실패하지 않도록 수정 (DX11 Mode 강제는 DXMT `dxgi.dll` 브리지 및 게임 `.ini` 설정 동기화로 처리).
+  - `Sources/MacDeck/SteamStorage.swift`:
+    - `stopAndWait(wine:)` 완료 후 `killPrefixProcesses(wine:)`(`wineserver -k`)를 호출하여 잔존 `steamwebhelper.exe` / `winedevice.exe` 프로세스와 공유 메모리를 완전히 정리.
+  - `Sources/MacDeck/Runtime.swift`:
+    - `start()`에서 Steam 자동 기동 시에는 백그라운드 업데이트 확인만 수행(`autoInstall: false`)하여 Steam 기동 중 dylib/DLL 덮어쓰기를 방지하고, `updateComponent` / `updateAllAvailableComponents` / `setGraphicsBackend` 실행 시에는 Steam을 먼저 정상 종료(`stopAndWait`)한 뒤 파일을 교체하고 재시작하도록 순서 수정.
+  - `Sources/MacDeck/SelfTests.swift`, `scripts/build-mac-app.sh`:
+    - 버전을 `0.5.3` (`CFBundleVersion = 9`)으로 올리고, `winedbg.exe=d` 및 prefix 내부 `drive_c/windows/system32/dxgi.dll` 동기화 검증을 포함한 **74개 자체 검사** 갱신.
+- 실제 실행한 검증과 결과:
+  - `bash ./scripts/build-mac-app.sh && ./dist/MacDeck.app/Contents/MacOS/MacDeck --self-test | tee evidence/v053-webhelper-fix-tests.log` → **74 checks passed**.
+  - `/Users/sjhdeux/Applications/MacDeck.app` 동기화 후 실제 실행(`open /Users/sjhdeux/Applications/MacDeck.app`) → `steamui_html.txt`에서 `BrowserReady: handle:65536` 및 `webhelper.txt`에서 `SP BPM_uid0`, `notificationtoasts_uid2`, `contextmenu_1_uid0` 정상 로드 확인 (`-startcount=0`, 재시작 0회, `winedbg` 프로세스 0개, 예외 0건).
 
