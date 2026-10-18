@@ -23,6 +23,7 @@ enum SelfTests {
         try check(decoded.games == [game], "library preserves identities, paths and literal arguments")
         let plan = try LaunchPlan.make(game: game, wine: "/usr/bin/true", disk: disk)
         try check(plan.arguments == [game.path] + game.arguments, "Windows arguments are passed directly without a shell")
+        try check(plan.environment["MTL_HUD_ENABLED"] == "0", "Metal HUD defaults off while Metal rendering remains available")
         try check(plan.environment["WINEPREFIX"] == disk.prefix(for: game).path, "each game receives its own Wine prefix")
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("winedbg.exe=d") == true && plan.environment["WINEDLLOVERRIDES"]?.contains("d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b") == true, "default global DX11 Mode keeps builtin D3D12/Vulkan for CEF DelayLoad and disables winedbg popups")
         try check(plan.environment["SDL_RENDER_DRIVER"] == "direct3d11", "SDL games use the Direct3D 11 path")
@@ -51,6 +52,8 @@ enum SelfTests {
         try check(steam.executable != nil, "Steam install is detected in the dedicated prefix")
         let entry = try steam.entry()
         try check(entry.arguments.contains("-gamepadui") && entry.prefix == steam.prefix.path, "Steam launches Big Picture in its persistent prefix")
+        try check(SteamClient.arguments(gpuAcceleration: false).contains("-cef-disable-gpu-compositing") && !SteamClient.arguments(gpuAcceleration: true).contains(where: { $0.contains("disable-gpu") }), "Steam GPU acceleration removes both software-rendering overrides and retains a reversible fallback")
+        try check(SteamClient.arguments(gpuAcceleration: true).contains("-cef-force-gpu"), "Steam accelerated mode explicitly requests GPU despite automatic software fallback")
         let manifest = "\"AppState\" { \"appid\" \"123\" \"name\" \"Test Game\" \"StateFlags\" \"4\" \"installdir\" \"Test Game\" }"
         try Data(manifest.utf8).write(to: steamapps.appendingPathComponent("appmanifest_123.acf"))
         let incomplete = manifest.replacingOccurrences(of: "\"123\"", with: "\"456\"").replacingOccurrences(of: "\"4\"", with: "\"2\"")
@@ -220,6 +223,7 @@ enum SelfTests {
         try check((try? String(contentsOf: configINI)).map { $0.contains("Capability=DirectX12") && $0.contains("TargetPlatform=DirectX12") } == true, "Global DX12 Mode updates game config INI to DirectX12")
         try disk.save(LibraryData(games: [dx12Game], winePath: fakeWineBin.path, graphicsBackend: .d3d12))
         let dx12Plan = try LaunchPlan.make(game: dx12Game, wine: fakeWineBin.path, disk: disk)
+        try check(dx12Plan.environment["MVK_CONFIG_RESUME_LOST_DEVICE"] == "0", "DX12 surfaces GPU device loss instead of forcing resume after timeout")
         try check(dx12Plan.environment["WINEDLLOVERRIDES"]?.contains("dxgi,d3d12,d3d12core,vulkan-1,winevulkan") == true, "Global DX12 Mode enables D3D12 and Vulkan overrides in LaunchPlan")
         let customDXGI = Data("third-party-reshade-dxgi".utf8)
         try customDXGI.write(to: deployedDXGI)
@@ -228,6 +232,9 @@ enum SelfTests {
         try Data("warn: DXGIAdapter: Unknown interface query 17399d75-964e-4c03-99f8-9d4fd196dd62\nD3D12CreateDeviceFailed\n".utf8).write(to: diag.renderer.appendingPathComponent("re3_dxgi.log"))
         let dx12Summary = try SessionDiagnostics.summary(folder: diag.folder)
         try check(dx12Summary.contains("IWineDXGIAdapter") && dx12Summary.contains("Direct3D 12 장치 생성 실패"), "diagnostics identify D3D12 adapter and device creation clues")
+        try Data("[mvk-warn] VK_TIMEOUT: Caused GPU Timeout Error\n[mvk-error] VK_ERROR_DEVICE_LOST\n".utf8).write(to: diag.renderer.appendingPathComponent("vulkan-stderr.log"))
+        let timeoutSummary = try SessionDiagnostics.summary(folder: diag.folder)
+        try check(timeoutSummary.contains("Metal GPU 작업 시간 초과") && timeoutSummary.contains("Vulkan GPU 장치 손실"), "diagnostics distinguish Metal timeout and subsequent device loss")
         try check(RuntimeUpdater.isNewer(remote: "v1.4.2", installed: "v1.4.1") && !RuntimeUpdater.isNewer(remote: "v0.80", installed: "v0.80") && RuntimeUpdater.isNewer(remote: "v10.0_9", installed: "v10.0_8"), "RuntimeUpdater compares semantic and engine versions accurately")
         let mvkJSON = Data(#"{"tag_name":"v1.4.2","assets":[{"name":"MoltenVK-all.tar","browser_download_url":"https://example.com/all.tar"},{"name":"MoltenVK-macos.tar","browser_download_url":"https://example.com/MoltenVK-macos.tar","digest":"sha256:f95765a6229cb7b915990a2890ce12ebe36a730b021545d3d52ae69ce4c4024e","size":46479360}]}"#.utf8)
         let parsedMVK = try RuntimeUpdater.parseReleaseJSON(mvkJSON, for: .moltenvk)
@@ -250,6 +257,15 @@ enum SelfTests {
         let mvkSHA = try RuntimeUpdater.sha256Hex(of: mvkTar)
         try RuntimeUpdater.installLocalArchive(kind: .moltenvk, version: "v1.4.2", archiveURL: mvkTar, expectedSHA256: mvkSHA, runtimeRoot: fakeRuntime, graphicsMode: .dxmt)
         try check(RuntimeUpdater.detectInstalledVersion(for: .moltenvk, runtimeRoot: fakeRuntime) == "v1.4.2" && FileManager.default.fileExists(atPath: fakeRuntime.appendingPathComponent("lib/libMoltenVK.dylib").path), "RuntimeUpdater verifies SHA-256 and installs MoltenVK dylib and version record")
+        let oldPlistHead = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>org.winehq.wine</string><key>CFBundleExecutable</key><string>wine</string><key>NSPrincipalClass</key><string>WineApplication</string><key>LSUIElement</key><string>1</string>"
+        let oldPlistEnd = "</dict>\n</plist>\n"
+        let oldEmbedded = Data((oldPlistHead + String(repeating: " ", count: 936 - oldPlistHead.utf8.count - oldPlistEnd.utf8.count) + oldPlistEnd).utf8)
+        let oldWine = Data("HEADER".utf8) + oldEmbedded + Data("TAIL".utf8)
+        let fixedWine = RuntimeUpdater.patchWineGameModePlist(oldWine)
+        let fixedPlist = try PropertyListSerialization.propertyList(from: fixedWine.subdata(in: 6..<(6 + 936)), format: nil) as! [String: Any]
+        try check(fixedWine.count == oldWine.count && fixedWine.prefix(6) == oldWine.prefix(6) && fixedWine.suffix(4) == oldWine.suffix(4), "Game Mode patch preserves executable size and bytes outside the plist")
+        try check(fixedPlist["LSSupportsGameMode"] as? Bool == true && fixedPlist["LSApplicationCategoryType"] as? String == "public.app-category.games" && fixedPlist["LSUIElement"] == nil, "Game Mode opt-in fits the actual 936-byte Wine plist instead of silently skipping")
+        try check(fixedPlist["NSPrincipalClass"] as? String == "WineApplication" && RuntimeUpdater.patchWineGameModePlist(fixedWine) == fixedWine, "Game Mode patch preserves Wine application class and is idempotent")
         print("\(checks + 3) checks passed")
     }
 }

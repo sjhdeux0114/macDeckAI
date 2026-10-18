@@ -1,0 +1,9 @@
+{
+  "sourceSHA256": "cafb32ba2b58e2e8decc1d6feabccdc131e1bf186713b34913a98974f94a3f02",
+  "metalSHA256": "e31a2ba3468e45ee2ec8d32ea7f74dda3db252bf1b659939802806f169426c54",
+  "outputSHA256": "99efd3c06ce9070c815922857c8aed5b6652017b70d1c4270b7e1f7a5a1ab725",
+  "newSectionRVA": "0x37c000",
+  "libraryBytes": 154883,
+  "originalBytes": 5350886,
+  "patchedBytes": 5509120
+}

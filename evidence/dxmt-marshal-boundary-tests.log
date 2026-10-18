@@ -1,0 +1,2 @@
+PASS zero draw; zero divisor; normal ceil division; overflow guard; 99 ordinary draw equivalence checks
+Source candidate only; GPU deployment not yet validated.

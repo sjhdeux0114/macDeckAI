@@ -1,0 +1,18 @@
+--- a/src/dxmt/dxmt_command.metal
++++ b/src/dxmt/dxmt_command.metal
+@@ -385,3 +385,3 @@
+-    uint patch_count_per_instance = task.draw_arguments.x / (uint)task.control_point_count;
+-    uint x = (patch_count_per_instance - 1) / task.patch_per_group + 1;
+-    if (x * task.draw_arguments.y > task.max_object_threadgroups) {
++    uint patch_count_per_instance = task.control_point_count ? task.draw_arguments.x / (uint)task.control_point_count : 0;
++    uint x = (patch_count_per_instance && task.patch_per_group) ? (patch_count_per_instance - 1) / task.patch_per_group + 1 : 0;
++    if (!x || (ulong)x * (ulong)task.draw_arguments.y > task.max_object_threadgroups) {
+@@ -398,0 +399 @@
++    index++;
+@@ -419,2 +420,2 @@
+-    uint x = (task.draw_arguments.x - 1) / task.vertex_count_per_warp + 1;
+-    if (x * task.draw_arguments.y > task.max_object_threadgroups) {
++    uint x = (task.draw_arguments.x && task.vertex_count_per_warp) ? (task.draw_arguments.x - 1) / task.vertex_count_per_warp + 1 : 0;
++    if (!x || (ulong)x * (ulong)task.draw_arguments.y > task.max_object_threadgroups) {
+@@ -431,0 +433 @@
++    index++;

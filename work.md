@@ -5,13 +5,14 @@
 ## 현재 상태 — 2026-10-18
 
 - 프로젝트: `/Users/sjhdeux/Documents/macdeck`
-- 현재 앱: **MacDeck 0.5.3**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
+- 현재 앱: **MacDeck 0.5.4**, Apple Silicon macOS용 실험판, 로컬 ad-hoc 서명.
 - 빌드 결과: `dist/MacDeck.app`
 - 설치된 앱: `/Users/sjhdeux/Applications/MacDeck.app`
 - 실제 호스트: Apple M5, 메모리 24 GiB, macOS 27.0.1. 최소 배포 대상 macOS 13은 빌드 설정이며 다른 기기에서 검증한 것은 아니다.
-- 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 공식 GitHub Releases 확인 및 자동 업데이트(`RuntimeUpdater`)**, **macOS Game Mode(`Game Mode: On`) 활성화 지원**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
-- 최종 자체 검사 **74개 통과**, 앱 빌드·서명 확인 성공.
+- 구현: 네이티브 라이브러리, Windows 게임 실행, **전역 DX11 Mode(DXMT → Metal, 기본값) / DX12 Mode(VKD3D + MoltenVK → Metal) 선택 및 실시간 전환**, **런타임 구성요소(MoltenVK · DXMT · Wine Engine) 공식 GitHub Releases 확인 및 자동 업데이트(`RuntimeUpdater`)**, **macOS Game Mode 지원 plist 반영(실제 On은 전체화면에서 별도 검증 필요)**, 실제 Windows Steam Big Picture, 설치 게임 가져오기, 외장 폴더의 Windows 드라이브 매핑 및 **앱 시작 시 자동 재연결**.
+- 최종 자체 검사 **82개 통과**, 앱 빌드·서명 확인 성공.
 - 실제 Windows Brogue CE 던전 렌더링 및 **M5 Metal HUD 확인 성공**.
+- RE3 DX11 non-RT: 영상 의존성 보완 후 사용자 구동 성공 보고. DMC5: GS/TS 수정 후보 적용 후 사용자 긴 렉 해소 보고. 두 게임 모두 장시간 안정성은 별도 검증 필요.
 - 실제 Windows Steam 로그인 완료 및 외장 NVMe 드라이브(`E:\SteamLibrary`)에 Steam 게임 4종(Resident Evil 3, Balatro, Halls of Torment, No Results Found) 다운로드·설치 확인 성공.
 - **Direct3D 12 3D 게임(Resident Evil 3, `re3.exe`) 실행 및 Apple M5 Metal 3(VKD3D 1.14 → winevulkan → MoltenVK) 전체화면(`2704x1756`, `38.45 FPS`) 렌더링 확인 성공** (기본 전역 모드는 **DX11 Mode**이며 설정에서 전환 가능).
 - Bluetooth DualShock 4를 Apple GameController 및 Wine과 같은 SDL2에서 인식하고 실제 버튼/축 변화 확인. Windows/Steam/게임 내부 조작은 아직 별도 검증 필요.
@@ -384,3 +385,145 @@ Wine 실행·다운로드·GUI 검사는 실행 환경에 따라 샌드박스 �
   - `bash ./scripts/build-mac-app.sh && ./dist/MacDeck.app/Contents/MacOS/MacDeck --self-test | tee evidence/v053-webhelper-fix-tests.log` → **74 checks passed**.
   - `/Users/sjhdeux/Applications/MacDeck.app` 동기화 후 실제 실행(`open /Users/sjhdeux/Applications/MacDeck.app`) → `steamui_html.txt`에서 `BrowserReady: handle:65536` 및 `webhelper.txt`에서 `SP BPM_uid0`, `notificationtoasts_uid2`, `contextmenu_1_uid0` 정상 로드 확인 (`-startcount=0`, 재시작 0회, `winedbg` 프로세스 0개, 예외 0건).
 
+
+### 2026-10-18 — RE3 플레이 중 크래시 / Game Mode Off 재조사 (진행 중)
+
+- 사용자: RE3 새 게임/플레이 중 크래시. 초기 3D 화면·FPS 확인은 안정적인 플레이 성공과 구분하도록 기록 정정 필요.
+- 현재 소스는 v0.5.3, 전역 DX11 Mode. 최근 RE3 렌더러 로그에 IWineDXGIAdapter 조회 오류가 있으며 Steam stderr 제외 정책으로 D3D12/Vulkan 진단이 충분히 보존되지 않음.
+- 설치된 Wine 실행 파일은 실제로 `LSUIElement=1`, 게임 카테고리/지원 키가 없는 상태. 앱 plist만 키가 있음. 기존 고정 길이 패치가 추가된 XML 길이를 수용하지 못해 조용히 원본을 반환한 문제 확인.
+- RuntimeUpdater와 런타임 준비 스크립트의 plist 패치를 간결한 XML 직렬화로 변경, 길이 초과 시 준비 스크립트가 오류를 보고하도록 수정. 원래 Wine 실행/NSPrincipalClass 등 필수 정보는 보존.
+- Apple 공식 자료상 Game Mode는 Apple Silicon/macOS14+의 macOS 기본 전체화면에서 CPU/GPU 우선순위 및 Bluetooth 지연 개선이 있으며 플래그만으로 실제 활성화를 단정하지 않음.
+
+
+### 2026-10-18 — v0.5.4: 실제 Game Mode opt-in 복구 / Vulkan 오류 보존
+
+- 사용자 확인: Resident Evil 3 새 게임/플레이 중 종료. 별도 첨부 오류는 `renderdevicedx12.cpp:11769 D3D12CreateDeviceFailed`로, 현재 DX11용 DXGI에서 D3D12 어댑터 조회 실패와 구분해 조사.
+- 기존 이력·현재 코드 검토: v0.5.0~0.5.3의 DX12/VKD3D/MoltenVK, 전역 모드, 외장 자동 연결, updater, Steam CEF 지연 로드 수정이 추가되어 있음. 과거 이력에 기재된 `evidence/re3-d3d12-moltenvk.log`는 현재 작업 폴더에서 찾지 못해 그 파일에 근거한 재검증은 하지 못함.
+- 실제 설치된 Wine의 embedded plist는 수정 전 `LSUIElement=1`, 게임 카테고리 및 지원 키 없음. 기존 긴 XML은 936-byte 공간을 초과해 조용히 원본 반환. `RuntimeUpdater.patchWineGameModePlist` 및 `prepare-metal-runtime.py`를 compact plist로 수정하고 불필요한 표시 메타데이터만 제거, `NSPrincipalClass=WineApplication` 등 필수 값과 바이너리 길이 보존.
+- 설치 Wine와 dist Wine 모두 원본을 `.cache/wine-before-gamemode-*`로 백업 후 패치/재서명. 실제 plist에서 `LSSupportsGameMode=true` 확인. 이는 macOS Game Mode On 자체를 확인한 결과가 아님.
+- Apple 공식 기준: Game Mode는 Apple Silicon/macOS14+의 macOS 기본 전체화면 게임에서 CPU/GPU 우선순위 및 Bluetooth 반응성을 개선. 현재 도구의 Accessibility 권한은 false라 게임 창을 기본 전체화면으로 자동 전환할 수 없었음. 공개 지원 키를 적용했으며 실제 On 검증은 게임 정상 실행/사용자 전체화면 전환 후 필요.
+- DX11 현재 설정에서 RE3 시작을 재현했고 IWineDXGIAdapter 조회 실패를 관측. DX12 진단 모드로 전역 모드를 전환해 분리 조사 중. 원래 모드는 DX11이었다. DX11 모드는 DX12 게임을 변환하는 기능이 아니며 Steam CEF 호환상 d3d12 DLL은 비활성화하지 않는다는 설명으로 UI/README 정정.
+- 기존 진단은 Steam stderr를 모두 버려 하위 게임의 Vulkan 오류를 놓칠 수 있었음. `scripts/graphics-log-filter.c` 추가: raw Steam stdout/stderr는 저장하지 않고 허용된 Vulkan/MoltenVK 오류만 보존, credential/URL 라인 제외. 독립 수집 프로세스가 EOF까지 읽어 launcher 종료에 따른 파이프 폐쇄 영향을 줄임. 새 renderer 기록은 `Renderer/vulkan-stderr.log`.
+- LaunchPlan에 vkd3d/vulkan warn/err 채널 활성화, Diagnostics에 VK_ERROR_DEVICE_LOST 단서 및 MVK resume 설정 기록. Runtime에서 Steam stderr를 필터에 연결. 기본 전체화면과 실제 On 상태를 구별하는 UI 안내 추가.
+- v0.5.4 빌드/자체 검사 **77개 통과** (`evidence/v054-build.log`, `evidence/v054-tests.log`). 별도 필터 3개 검사(그래픽 오류 보존, 인증/URL 제외, EOF 종료) 통과 (`evidence/graphics-filter-tests.log`).
+- Steam 게임 프로세스 기록에서 RE3 `-1073741819` (0xC0000005) 종료가 반복된 이력 확인. 이 코드만으로 GPU 원인으로 확정하지 않음. 기존 Steam assert dump는 예외 스트림이 없어서 예외/모듈 메타데이터만으로 원인 주소를 얻지 못함. 원본 dump는 복사/내보내지 않음 (`scripts/inspect-minidump-exception.py`).
+- 재현 중 Steam 인증 화면이 생겨 사용자 로그인을 요청했으나 사용자가 실행되지 않는다고 답함. 진단 중 남은 MacDeck Wine Steam 하위 프로세스만 실제 실행 경로를 확인 후 종료하고, v0.5.4 설치/서명 검증 후 LaunchServices `open`으로 MacDeck → Steam 시작을 다시 진행.
+- 설치본의 런타임은 유지하고 main/Info.plist/필터만 교체 후 앱 전체를 ad-hoc 재서명. 현재 전역 모드는 진단용 DX12. 안정적 플레이 및 실제 Game Mode On은 아직 미검증이며 계속 추적 필요.
+
+### 2026-10-18 — RE3 검은 화면: GPU timeout → device lost 확보
+
+- 사용자가 잠시 플레이 유지/Game Mode Off를 보고한 후 검은 화면 정지를 재보고. 안정적 플레이 성공 주장은 하지 않음.
+- DX12 Steam 세션의 렌더러 로그에서 Metal GPU Timeout Error 반복 후 VK_ERROR_DEVICE_LOST 및 Vulkan timeline semaphore 대기 실패(vr -4)를 확인. 그래픽 오류만 evidence/re3-play-crash/metal-timeout-device-lost.log에 보존. 실패한 명령/셰이더의 근본 원인은 미확정.
+- LaunchPlan의 MVK_CONFIG_RESUME_LOST_DEVICE 강제 1을 0으로 변경, MoltenVK 기본 장치 손실 보고 동작 복구. GPU timeout 자체의 해결책이 아니며 현재 프로세스에는 소급 적용되지 않음.
+- Diagnostics에 GPU timeout 단서 추가. 장치 손실 전달 및 timeout/device lost 요약 검사 2개 추가. Game Mode On 미확인.
+
+- 검은 화면 진단 수정 후 빌드 성공 및 자체 검사 **79개 통과** (`evidence/v054-timeout-build.log`, `evidence/v054-timeout-tests.log`). 실제 게임 재검증은 미완료. DX11 비교를 위해 Steam beta dx11_non-rt 제공 여부를 사용자에게 확인 요청.
+- 검증된 main 실행 파일을 설치본에 반영하고 앱 전체 ad-hoc 재서명/strict 검증 완료. 실행 중 게임/Steam은 종료하거나 재시작하지 않음. 새 환경은 다음 MacDeck/Steam 실행부터 적용.
+
+### 2026-10-18 — RE3 DX11 비교 준비
+- 사용자 확인: Steam에 dx11_non-rt 베타가 제공됨. 사용자에게 해당 버전 선택/다운로드를 안내. 제공 여부 확인은 설치 완료나 Metal 플레이 성공을 의미하지 않음.
+- 게임 다운로드 중 Steam 종료를 피하기 위해 전역 DX12 설정은 아직 유지. 다운로드 완료 후 RE3 종료 → MacDeck 전역 DX11 Mode 전환(앱의 Steam 종료/재시작 절차 사용) → DXMT Metal 렌더링/동일 크래시 구간 비교가 다음 단계.
+
+### 2026-10-18 — DX11 non-RT도 새 게임 시작 시 크래시
+- 사용자 보고: 타이틀 정상, 게임 시작 후 크래시. 실제 Steam manifest에서 dx11_non-rt/build11047294/StateFlags4 및 MacDeck graphicsBackend=dxmt, 게임 ini DirectX11 확인. 잘못된 DX12 모드 선택 문제는 아님.
+- Steam gameprocess_log의 10:40:09 및 10:41:25 RE3 종료는 둘 다 -1073741819(0xC0000005). 최신 re3 DXGI/D3D11 로그는 빈 파일. DX12에서 본 Metal timeout과 동일 원인으로 단정할 수 없음.
+- 선택적 MACDECK_TRACE_EXCEPTIONS=1 실행 시 Wine SEH 추적을 활성화하고, 수집기는 dispatch_exception code 메타데이터만 추가 보존하도록 변경. raw Steam/인증/임의 SEH payload는 저장하지 않음. 진단 요약에 접근 위반 분류 추가.
+- RE Engine 영상 재생 호환성 참고 소스 https://github.com/l00sed/re-engine-macos 검토. CrossOver26에서의 검증이며 현재 Wine10 원인 확정 근거가 아니므로 shim 설치/외부 DLL 교체는 아직 하지 않음.
+
+- 예외 진단 빌드 자체 검사79개 통과(evidence/dx11-exception-tests.log). 실제 C 필터에서 code/address 보존, arbitrary SEH payload/credential/raw Steam 제외 검증 통과(evidence/exception-filter-tests.log). DX11 준비 helper 빌드 완료; 첫 컴파일은 파일명 추정 오류 후 실제 소스 목록으로 수정해 성공.
+
+- 설치본 진단 collector/실행 파일 교체 및 서명 검증 후 Steam을 MACDECK_TRACE_EXCEPTIONS=1로 재시작. 실제 새 세션 WINEDEBUG trace+seh 활성화 확인, 사용자에게 동일 구간 재현 요청.
+- 추가 확인: 설치 런타임에 libgstvideo/libgstreamer/libglib 의존성이 없음. x86_64 dlopen probe에서 winegstreamer.so가 @rpath/libgstvideo-1.0.0.dylib 누락으로 로드 실패(evidence/media-dependency-probe.log). 이는 확정된 패키징 결함이나 RE3 접근 위반의 직접 원인은 아직 미확인.
+
+### 2026-10-18 — 영상 의존성 복구 및 Steam 한글 네모 수정
+- 새 예외 수집에서 RE3 DX11 주소 0x14273EABB 접근 위반 확인. disassembly는 객체 멤버(+0xb8)를 역참조해 vtable+0x28 호출 직전 실패, 인접 코드에 MF_E_NO_MORE_TYPES(0xc00d36b9) 비교가 있어 Media Foundation 경로를 강하게 의심. 레지스터/전체 스택은 미수집이므로 null 포인터 및 정확한 인터페이스는 아직 추정.
+- 공식 GStreamer1.28.8(공식 다운로드 링크, SHA256 d371ab04a7632713626836c2fc234e863cc98484c74c473eba99b0fbd9b3a3fe)을 프로젝트 캐시에 다운로드. pkg는 서명 없음, 시스템 installer는 실행하지 않고 pkgutil --expand-full로 추출. core/base-system/base-crypto/playback/codecs/libav를 Runtime/Media에 사설 배치(약287MB).
+- scripts/prepare-gstreamer.py 추가 및 prepare-metal-runtime.py 연결. LaunchPlan에 Media/lib 검색 경로, plugin/scanner 경로, 쓰기 가능한 registry 경로 추가. winegstreamer.so x86_64 dlopen이 실패에서 loaded로 변경, x86_64 gst-inspect avdec_wmv3 인식 통과. 실제 RE3 영상/플레이는 아직 미검증.
+- 사용자 첨부 Steam 대화상자의 한글 네모: Steam prefix Windows/Fonts가 비어 있음을 확인. WineFonts.swift 추가: Mac에 이미 설치된 AppleSDGothicNeo.ttc를 prefix에 symlink(앱에 Apple 글꼴 재배포하지 않음), Malgun/Gulim/Dotum 대체 및 Tahoma/Arial/Segoe UI/Microsoft Sans Serif의 Korean FontLink를 regedit로 등록. 성공 마커로 반복 등록 방지.
+- 빌드 및 자체 검사79개 통과(evidence/media-fonts-*). 글꼴은 실제 Steam 화면에서 재검증 필요.
+
+- 첫 한글 등록은 helper의 DYLD_FALLBACK_LIBRARY_PATH 누락으로 실패, 사용자가 같은 오류 메시지를 보고. WineFonts에 Runtime/lib 및 Media/lib 경로를 명시해 수정. 동일 regedit 명령은 종료0이며 실제 FontLink 및 Wine Fonts Replacements 등록 확인. 수정 후 빌드/검사79개 재통과. 원인 수정본 설치/재실행 진행.
+- 수정본 설치/strict 서명 검증/재실행 완료. Steam prefix의 .macdeck-korean-fonts-v1 성공 마커 생성과 새 Steam 세션 2026-10-18T01-49-17Z 상태 running 확인. 실제 화면의 한글 및 RE3 새 게임 재검증을 사용자에게 요청.
+
+### 2026-10-18 — 디코더 보완 후 동일 크래시 / ASF 파서 누락 추가 확인
+- 사용자: 여전히 크래시. 01:49:17Z 세션에서 동일 RE3 주소 0x14273EABB 접근 위반 확인. 영상 모듈 dlopen/WMV 디코더 성공만으로 게임을 해결했다고 볼 수 없음.
+- 추가 검사: 기존 Media에 libav WMV 디코더는 있지만 ASF demuxer(libgstasf.dylib)가 없음. 공식 패키지 gstreamer-1.0-codecs-restricted에 있어 prepare-gstreamer.py의 사설 배치 목록에 추가. 실제 ASF 파서 검증 진행.
+- 선택적 진단에 MF/mfplat/mfreadwrite/winegstreamer warn/err 및 SourceReader 생성 호출 메타데이터, 별도 GStreamer warning 로그를 추가해 단순 예외 주소 이상의 생성 실패 단서를 보존하도록 개선. 일반 Steam raw 출력은 계속 저장하지 않음.
+
+- ASF demuxer x86_64 gst-inspect 통과(evidence/gstreamer-asf-probe.log). 합성 WMV/ASF 생성 파이프라인과 filesrc→asfdemux→avdec_wmv2→fakesink 실제 디코드 모두 종료0(evidence/asf-decode-pipeline.log). 이는 RE3의 실제 SourceReader/영상 재생 성공과 구별. MF 진단 빌드 자체검사79개 통과.
+- 설치본에 ASF 포함 Media 및 MF 진단 실행 파일/collector 동기화, Steam 정상 종료 후 DX11로 재시작. 사용자 동일 구간 재검증 필요.
+
+### 2026-10-18 — 영상 소스 실패 직접 단서: deinterlace 누락
+- 사용자 재현: ASF 보완 뒤에도 크래시. 최신 세션의 GStreamer 로그에서 no such element factory "deinterlace" → streaming not-linked(-1), MFMediaSource 생성 실패0x80004005 → 동일 RE3 0x14273EABB 접근 위반 순서를 확인. 발췌 evidence/re3-play-crash/deinterlace-missing.log.
+- Wine10 wg_parser.c의 stream_create_post_processing_elements는 영상에 deinterlace→videoconvert→videoflip→videoconvert를 요구함을 공식 소스로 확인. 이전 단순 디코드 검사에는 이 후처리가 없어 누락을 잡지 못함.
+- prepare-gstreamer.py에 공식 effects 패키지를 추가. verify-media-runtime.py 신규: x86_64에서 Wine 요구 factory12종 및 ASF decodebin→동일 후처리 파이프라인, 음성 변환 검사. 게임 재현 전에 의존 요소를 검사하도록 검증 범위를 보완.
+
+- Wine 필수 factory12종, 실제 ASF decode+Wine 후처리 체인, 음성 변환 총14항목 통과(evidence/wine-media-chain-tests.log). effects 포함 Media 설치본 동기화 및 앱 서명 검증 후 DX11 진단 Steam 재시작. 실제 RE3 새 게임 재검증 대기.
+
+### 2026-10-18 — 사용자 RE3 구동 확인 / HUD 및 Game Mode 안내
+- deinterlace 보완 후 사용자가 "구동 되었어"라고 보고. DX11 non-RT의 게임 시작 구간 통과 보고이며 장시간 안정성·전체 게임 호환성 검증은 아님. 사용자 다른 게임 테스트 예정.
+- Game Mode는 여전히 Off라고 사용자 보고. Metal HUD는 LaunchPlan의 MTL_HUD_ENABLED=1로 켜져 있고 앱 내 별도 토글은 현재 없음. HUD 표시와 Game Mode 활성화는 별개. macOS 기본 전체화면 및 게임 오버레이의 Game Mode 메뉴 확인 필요.
+
+### 2026-10-18 — Steam Big Picture 버벅임: 화면 GPU 가속 비교
+- 사용자: 게임은 괜찮지만 Big Picture가 버벅임. SteamClient.arguments에 cef-disable-gpu/cef-disable-gpu-compositing가 고정돼 있고 실제 webhelper 로그가 Disabling GPU acceleration 및 SP BPM mode:System임을 확인. CPU 합성 경로가 성능 저하의 유력한 원인이나 수치 측정은 아직 없음.
+- LibraryData.steamGPUAcceleration 선택 설정, SteamClient 가속 허용 인자, Steam 설정 화면 토글 추가. 기본 호환 동작은 유지하고 선택 시 두 GPU 비활성화 인자를 제거. 게임 Metal 백엔드와 독립. 적용은 Steam 완전 재시작 후. 검은 화면이면 토글 끄고 복귀 가능.
+- DXMT issue141의 cross-process swapchain 제한도 검토. 플래그 제거만으로 실제 하드웨어 가속 성공을 단정하지 않고 현재 vendor Wine에서 검증 예정. 게임 exe/Steam 인증 설정 파일은 변경하지 않음.
+
+- 화면 가속 변경 빌드 자체검사80개 통과(evidence/steam-gpu-tests.log), baseline mode:System/disable 로그를 evidence/steam-gpu-baseline.log에 발췌. 설치본에 실행 파일 반영/strict 서명 검증 및 steamGPUAcceleration=true로 Steam 재시작. 실제 GPU 모드/성능 검증 진행 중.
+
+- 실제 가속 허용 재시작 결과: BrowserReady 정상이나 Big Picture mode:System 유지. child 인자만 추출해 --in-process-gpu, --disable-gpu, --use-angle=swiftshader-webgl 확인(evidence/steam-gpu-allowed-still-software.log). 강제 disable-compositing 제거만으로 내부 Steam GPU 비활성화가 해제되지 않음. Steam 인터페이스의 웹 보기 GPU 가속을 사용자에게 확인 요청. 인증 config는 읽지 않음. 아직 성능 개선 성공으로 보고하지 않음.
+
+### 2026-10-18 — 내부 Steam 가속 설정 On에도 소프트웨어 유지
+- 사용자 확인: Steam 웹 GPU 가속은 이미 On, 버벅임 동일. 설정을 끄고 있어서라는 가정은 배제. 현 child 인자는 --disable-gpu/SwiftShader이므로 checkbox만으로 실제 가속을 판단할 수 없음.
+- SteamClient 가속 모드에 명시적 -cef-force-gpu 추가, 대응 검사 추가. 한 변수씩 비교하며 실제 Big Picture mode 및 CEF 예외 확인 예정. 호환 모드 인자는 유지해 복귀 가능.
+
+### 2026-10-18 — GPU 비교의 설정 손실 발견 및 외장 권한 반복
+- 사용자: 설정 On에도 여전히 버벅임, 외장 허용 창 반복. 설치본 DR은 cdhash 기반 ad-hoc임을 codesign -d -r-로 확인. 빌드/재서명 시 식별값이 달라져 TCC 권한이 반복될 가능성. 권한 창 앱 이름 사용자 확인 요청; 임의 TCC DB 변경이나 Full Disk Access 요구는 하지 않음.
+- 실제 own library.json의 steamGPUAcceleration이 nil로 돌아가 있음 확인. 구형 .build/re3-dx11-prepare가 새 필드를 모르는 LibraryData로 load/save하여 필드를 버린 진단 도구 결함. 앞선 force-GPU 시험은 실제 가속 시험으로 볼 수 없으며 baseline 소프트웨어로 돌아갔음. helper 종료 후 원본 JSON을 유지하는 원자적 수정으로 true 복구, 재시작 재검증.
+
+### 2026-10-18 — Steam GPU runtime injection / external permission
+- Confirmed steamGPUAcceleration=true and -cef-force-gpu, but Wine kernelbase.dll injects UTF16 ` --no-sandbox --in-process-gpu --disable-gpu` specifically for Steam.
+- Added scripts/patch-steam-gpu-workaround.py: exact unique match, same byte length, original backups and --restore, reject unknown input. Applied to dist/installed runtime and Steam prefix, resigned and restarted for comparison; actual GPU rendering still under verification.
+- User reports latest restart did not request external permission. Installed ad-hoc designated requirement is cdhash-based; no valid local signing identity found. Permission may be requested after resigning; no TCC database changes made.
+
+- User screenshot confirms removable-volume permission requester is MacDeck. Prompt recurred immediately after kernelbase patch + app ad-hoc resign. Same-build restart retained access earlier; cross-build persistence is not fixed. User instructed to Allow in the system prompt; no automatic approval/TCC edits. Stable certificate-based signing is required to address update identity continuity; no valid signing identities available locally.
+
+### 2026-10-18 — DMC5 GPU hang and HUD removal
+- DMC5 user report: intermittent >60s freezes, audio/input continues but no screen refresh after Command-Tab. DXMT log confirms first Metal GPU timeout at frame26044 followed by rejected submissions. Evidence: evidence/dmc5-first-gpu-errors.log. This is GPU command failure; Command-Tab causality and exact shader remain unproven.
+- DMC5 is DX11, exclusive fullscreen, variable framerate, highest mesh/texture/shadows. Game has exited (Steam App601150 removal at11:49:04). DXMT issue200 is a possible GS/TS marshal defect but not confirmed for DMC5; local metal compiler unavailable, so no shader fix claimed. Mitigation/retest remains pending.
+- User confirms Steam Big Picture now works well after Steam-only kernelbase patch. This is user confirmation; no frame-time benchmark performed.
+- User requests HUD removal. Replaced hardcoded MTL_HUD_ENABLED=1 with persistent showMetalHUD setting, default off. Added runtime UI toggle, next full Steam/game restart applies. Rendering/error logging retained. Added default-off check.
+
+- HUD-off build and 82 self-checks passed (evidence/hud-off-*). Installed/resigned, Steam restarted using newly compiled stop-only helper (does not rewrite library settings). Preserved Steam GPU setting and patched kernelbase. New session MTL_HUD_ENABLED=0. Actual game HUD absence still requires display confirmation.
+
+### 2026-10-18 — Repeated volume consent after HUD build
+- User still reports consent prompts. HUD update also changed the ad-hoc designated requirement; current installed DR cdhash is 3241fa7e9e29dde08cb7a677d5d29522f68df234. codesign --verify --strict currently succeeds, so signature corruption during this run is not established.
+- Asked whether prompts recur within the same run, on restart, or only after updates. No further code/bundle mutation or resigning in this investigation, to avoid resetting the observed identity again. Cross-build permission persistence is unresolved; no automatic Allow/TCC changes attempted.
+
+- User confirms removable-volume prompts occur after applying updated builds, not repeatedly within the same run. This matches changing cdhash-based ad-hoc identity. Current permission behavior is update-related; stable certificate signing remains the required development/distribution follow-up. Avoid promising that ordinary folder re-selection or bookmarks fix signature identity changes.
+
+### 2026-10-18 — DMC5 windowed/60 still freezes immediately
+- User reports windowed + 60 FPS also freezes immediately on gameplay start. Latest DMC5 d3d11 log is empty; no new GPU timeout was captured, so the prior timeout cannot be assigned to this run without further evidence. Steam tracked process exited at11:56:38; no DMC5 process was found.
+- On-disk ini has WindowMode=Normal but FramerateSetting=VARIABLE. This can reflect unsaved settings after the freeze, not proof user did not select60.
+- Read official DXMT0.80 dxmt.conf: d3d11.preferredMaxFrameRate provides Metal-side pacing; dxgi.handleAltTab exists for Wine exclusive-fullscreen transitions. Installed DMC5-only dxmt.conf with60 and True, preserving previous file if present; no app/bundle mutation or resign. Prepared file .cache/dmc5-dxmt-comparison.conf.
+- This is a comparison mitigation, not a GS/TS shader fix. Issue200 remains a hypothesis; local metal compiler is unavailable. Actual DMC5 gameplay validation remains pending.
+
+### 2026-10-18 — DMC5 repeated same-scene live stalls
+- User reports same-scene recurring long stalls; stall later recovers and quickly returns. Live PID29982 sampled for3s (evidence/dmc5-live-hang.sample.txt). dxmt-finish-thr includes Metal waitUntilCompleted; encode thread remains in draw/encoding. This supports render-side investigation but does not identify the offending shader.
+- Prepared patches/dxmt-0.80-gs-ts-marshal.patch and .cache/dxmt_command-fixed.metal: zero-count/division guards, 64-bit dispatch multiply, loop index increment. Candidate follows upstream issue200 but DMC5 causality remains unproven. No runtime deployment yet.
+- Corrected earlier toolchain finding: Xcode.app exists; default developer directory points to CLT. Using DEVELOPER_DIR locates metal stub, but actual compilation fails due missing Metal Toolchain. Started official xcodebuild -downloadComponent MetalToolchain using Xcode directory; no system xcode-select change.
+- User advised they can close unplayable game; no further settings-only replay requested.
+
+- Apple Metal Toolchain27A266a downloaded successfully (~839MB) using installed Xcode via DEVELOPER_DIR. Candidate Metal3.1 library compiles. Native check found same36 functions and actual GS two-task GPU output [0,0,0,2,1,1] passes with Metal API validation. Test initially used an attachment-free render pass and hit internal error; adding a1x1 render attachment corrected the test harness. Evidence/dxmt-marshal-metal-tests.log.
+- Original embedded metallib152339bytes; candidate154883bytes, so in-place replacement is not safe yet. Runtime remains unchanged. Comparing compiler options for a fitting, equivalent candidate before any deployment. No claim of DMC5 fix yet.
+
+### 2026-10-18 — Experimental DXMT GS/TS candidate deployment
+- Native Metal validation passes GS and TS multi-task cases: zero draw and zero control points produce zero dispatch; second tasks execute with expected [2,1,1] and [3,1,1]. All36 original function names preserved. CPU boundary checks include 64-bit overflow rejection and ordinary draw equivalence.
+- Candidate metallib is154883bytes vs original152339. To avoid overwriting adjacent data, scripts/patch-dxmt-marshal.py appends a read-only .mdmetal PE section, adjusts the explicit library pointer and length, and updates PE metadata. Exact original SHA256 lock; unknown builds rejected. Only32 original bytes differ, all within declared headers/pointer/length fields; Wine builtin marker and existing identity-rotation patch preserved. Evidence/dxmt-marshal-pe-*.
+- User explicitly confirmed DMC5 exited. Stopped Steam with non-rewriting helper; backed up original x86_64 runtime/dist/prefix DLLs in .cache/dmc5-marshal-backups; installed candidate and macdeck-gs-ts-marshal-patch.json experimental metadata. GPU setting, kernelbase Steam patch, HUD-off and media libraries retained. Resign/restart required; removable-volume consent may recur after this updated build.
+- This is an experimental candidate for a plausible upstream defect, not confirmed DMC5 root-cause resolution. Same-scene gameplay and startup need user validation. Original DLLs remain recoverable. Fresh runtime preparation/component replacement may overwrite this candidate; reapplication requires version-locked script and recorded Metal library build, never blindly patch an unknown version.
+
+### 2026-10-18 — 사용자 DMC5 렉 해소 확인 / 커밋·푸시 준비
+- 사용자: "렉은 없어졌어". 실험적 DXMT GS/TS 보완 후 동일 구간의 긴 렉이 사라졌다는 사용자 확인을 받음. 모든 장면·장시간·다른 게임에 대한 완전한 안정성 보장은 아님.
+- 현재까지 RE3 영상 소스 의존성/한글 글꼴, Game Mode 지원 키, 렌더러 진단, Steam Big Picture GPU 경로, HUD 기본 끔, DMC5 GS/TS 후보를 누적 정리. Game Mode On과 DX12 안정성, 업데이트 간 외장 권한 유지 문제는 미해결.
+- 사용자 요청에 따라 코드/문서/재현 가능한 검사 및 선별된 비민감 결과를 커밋·푸시. Steam raw 로그, 메모리 덤프, 인증 화면/파일, 원본 프로세스 샘플 및 로컬 런타임 바이너리는 업로드 제외. 최종 앱 빌드 검사82개, 미디어14항목, 실제 Metal GS/TS 검사 통과 이력을 구분해 기록.

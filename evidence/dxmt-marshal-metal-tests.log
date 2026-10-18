@@ -1,0 +1,4 @@
+2026-10-18 12:07:14.435 check-metal-marshal[31873:12762453] Metal API Validation Enabled
+PASS matching library functions: 36
+PASS actual Metal GS batch: zero draw skipped; second task executed: [0, 0, 0, 2, 1, 1]
+PASS actual Metal TS batch: zero control points skipped; second task executed: [0, 0, 0, 3, 1, 1]

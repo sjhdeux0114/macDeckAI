@@ -88,13 +88,16 @@ struct SteamClient {
     }
     var executable: URL? { root?.appendingPathComponent("steam.exe") }
     static let arguments = ["-gamepadui", "-no-cef-sandbox", "-cef-disable-gpu", "-cef-disable-gpu-compositing"]
+    static func arguments(gpuAcceleration: Bool) -> [String] {
+        gpuAcceleration ? ["-gamepadui", "-no-cef-sandbox", "-cef-force-gpu"] : arguments
+    }
 
     func entry() throws -> Game {
         guard let executable else { throw DeckError.message("Steam 설치를 먼저 완료해 주세요.") }
         var game = try Game.importing(executable)
         game.name = "Steam · Big Picture"
         game.prefix = prefix.path
-        game.arguments = Self.arguments
+        game.arguments = Self.arguments(gpuAcceleration: (try? disk.load().steamGPUAcceleration) ?? false)
         return game
     }
 

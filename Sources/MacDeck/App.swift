@@ -121,7 +121,7 @@ struct DeckView: View {
                 Text(model.graphicsBackend == .dxmt ? "DXMT → Metal (DirectX 11)" : "VKD3D · MoltenVK → Metal (DirectX 12)").font(.system(size: 10)).foregroundStyle(.secondary)
             }.padding(14).frame(maxWidth: .infinity, alignment: .leading).background(accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
             Button("데이터 폴더 열기", action: model.revealData).buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 12)
-            Text("MacDeck · Preview 0.5.2").font(.system(size: 10)).foregroundStyle(.tertiary).padding(.top, 6)
+            Text("MacDeck · Preview 0.5.4").font(.system(size: 10)).foregroundStyle(.tertiary).padding(.top, 6)
         }.padding(20).background(Color(red: 0.075, green: 0.085, blue: 0.1))
     }
 
@@ -329,8 +329,9 @@ struct DeckView: View {
                 Link("Apple 설치 안내", destination: URL(string: "https://support.apple.com/102527")!)
             }
             panel("그래픽 검증 및 macOS 게임 모드", icon: "sparkles") {
-                Text("게임 실행 시 Metal HUD, macOS Game Mode(게임 모드), DXMT 로그를 켭니다.")
-                Text("DX11 Mode는 DXMT를 통해 안정적으로 Metal 가속을 수행하며, DX12 Mode는 Wine VKD3D + MoltenVK 브리지를 사용합니다.").font(.callout).foregroundStyle(.secondary)
+                Toggle("Metal 성능 HUD 표시", isOn: Binding(get: { model.library.showMetalHUD ?? false }, set: model.setMetalHUD))
+                Text("기본값은 끔입니다. 변경 후 Steam과 게임을 완전히 종료하고 다시 실행하세요. HUD를 꺼도 Metal 가속과 오류 로그는 유지됩니다.")
+                Text("DX11 Mode는 D3D10/11을 DXMT로 가속하며 D3D12 전용 게임을 DX11로 변환하지 않습니다. DX12 Mode는 실험적입니다. Game Mode가 Off이면 게임 창에서 Control–Command–F로 기본 전체화면에 진입하고 macOS 게임 오버레이에서 상태를 확인하세요.").font(.callout).foregroundStyle(.secondary)
                 Button("로그 및 데이터 폴더", action: model.revealData)
             }
         }
@@ -415,6 +416,8 @@ struct DeckView: View {
                 }
                 Text("선택한 DX11 Mode / DX12 Mode는 모든 게임에 전역으로 적용됩니다. 비밀번호와 Steam Guard 코드는 Steam 창에서 직접 입력하세요.").font(.callout).foregroundStyle(.secondary)
                 Toggle("MacDeck을 열면 Steam Big Picture 자동 시작", isOn: Binding(get: { model.library.startSteamOnLaunch ?? true }, set: model.setSteamAutostart))
+                Toggle("Steam 화면 GPU 가속 (실험적)", isOn: Binding(get: { model.library.steamGPUAcceleration ?? false }, set: model.setSteamGPUAcceleration))
+                Text("Big Picture의 화면 가속을 허용합니다. Steam을 완전히 종료한 뒤 다시 실행해야 적용됩니다. 검은 화면이나 Steam 오류가 생기면 이 옵션을 끄세요. 게임의 Metal 가속 설정과는 별개입니다.").font(.caption).foregroundStyle(.secondary)
             }
             panel("게임 설치 폴더", icon: "externaldrive") {
                 Text("큰 게임 파일은 외장 SSD나 HDD에 저장할 수 있습니다. Steam과 Windows 실행 환경은 Mac에 유지됩니다.").font(.callout).foregroundStyle(.secondary)

@@ -97,6 +97,7 @@ final class DeckModel: ObservableObject {
     let disk: LibraryDisk
     private var writable = true
     private var processes: [UUID: Process] = [:]
+    private var graphicsFilters: [UUID: Process] = [:]
     private var nativeApps: [UUID: NSRunningApplication] = [:]
     private var logHandles: [UUID: FileHandle] = [:]
     private var timer: Timer?
@@ -384,11 +385,15 @@ final class DeckModel: ObservableObject {
                     throw DeckError.message("같은 Windows 환경에서 실행 중인 항목이 있습니다. 해당 실행이 끝난 뒤 다시 시도해 주세요.")
                 }
                 try disk.preparePrefix(for: game)
+                if let wine = runtime.path { try WineFonts.prepare(prefix: prefix, wine: wine) }
             }
             var plan = try LaunchPlan.make(game: game, wine: runtime.path, disk: disk)
             let diagnostic = try SessionDiagnostics(game: game, plan: plan, disk: disk,
                 runtimeManifest: Bundle.main.resourceURL?.appendingPathComponent("runtime-manifest.json"))
             plan.environment["DXMT_LOG_PATH"] = diagnostic.renderer.path
+            if plan.environment["GST_DEBUG"] != nil {
+                plan.environment["GST_DEBUG_FILE"] = diagnostic.renderer.appendingPathComponent("gstreamer.log").path
+            }
             try FileManager.default.createDirectory(at: disk.logs, withIntermediateDirectories: true)
             let log = diagnostic.output
             let header = "MacDeck session\nGame: \(game.name)\nExecutable: \(plan.executable.path)\nStarted: \(Date())\n\n"
@@ -403,6 +408,23 @@ final class DeckModel: ObservableObject {
             process.currentDirectoryURL = plan.workingDirectory
             process.standardOutput = steamCommand ? FileHandle.nullDevice : output
             process.standardError = steamCommand ? FileHandle.nullDevice : output
+            var graphicsPipe: Pipe?
+            if steamCommand, let filter = Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("graphics-log-filter"), FileManager.default.isExecutableFile(atPath: filter.path) {
+                let pipe = Pipe(), collector = Process(), collectorID = UUID()
+                collector.executableURL = filter
+                collector.arguments = [diagnostic.renderer.appendingPathComponent("vulkan-stderr.log").path]
+                collector.standardInput = pipe.fileHandleForReading
+                collector.standardOutput = FileHandle.nullDevice; collector.standardError = FileHandle.nullDevice
+                collector.terminationHandler = { [weak self] _ in
+                    Task { @MainActor in self?.graphicsFilters.removeValue(forKey: collectorID) }
+                }
+                try collector.run()
+                graphicsFilters[collectorID] = collector
+                try? pipe.fileHandleForReading.close()
+                process.standardError = pipe.fileHandleForWriting
+                graphicsPipe = pipe
+            }
+            defer { try? graphicsPipe?.fileHandleForWriting.close() }
             process.terminationHandler = { [weak self] child in
                 Task { @MainActor in
                     guard let self else { return }
@@ -760,6 +782,24 @@ final class DeckModel: ObservableObject {
             selected = steam.id
             page = "steam"
             launch(steam)
+        } catch { message = error.localizedDescription }
+    }
+
+    func setSteamGPUAcceleration(_ enabled: Bool) {
+        do {
+            var data = library
+            data.steamGPUAcceleration = enabled
+            try commit(data)
+            steamProgress = "화면 가속 설정은 Steam을 완전히 종료한 뒤 다시 실행하면 적용됩니다."
+        } catch { message = error.localizedDescription }
+    }
+
+    func setMetalHUD(_ enabled: Bool) {
+        do {
+            var data = library
+            data.showMetalHUD = enabled
+            try commit(data)
+            steamProgress = "성능 표시 설정은 Steam과 게임을 완전히 종료한 뒤 다시 실행하면 적용됩니다."
         } catch { message = error.localizedDescription }
     }
 

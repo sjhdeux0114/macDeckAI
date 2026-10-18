@@ -1,0 +1,1 @@
+PASS only declared PE headers, library length and one RIP-relative library pointer changed; original code/data and Wine builtin marker otherwise preserved

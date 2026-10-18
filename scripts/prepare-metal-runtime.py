@@ -88,32 +88,17 @@ if wine_bin.exists():
     if plist_start != -1 and plist_end != -1:
         plist_end += len(b"</plist>\n")
         orig_len = plist_end - plist_start
-        new_plist = (
-            b'<?xml version="1.0" encoding="UTF-8"?>\n'
-            b'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
-            b'<plist version="1.0">\n<dict>\n'
-            b'<key>CFBundleAllowMixedLocalizations</key><true/>\n'
-            b'<key>CFBundleDevelopmentRegion</key><string>English</string>\n'
-            b'<key>CFBundleExecutable</key><string>wine</string>\n'
-            b'<key>CFBundleIdentifier</key><string>org.winehq.wine</string>\n'
-            b'<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n'
-            b'<key>CFBundleName</key><string>Wine</string>\n'
-            b'<key>CFBundlePackageType</key><string>APPL</string>\n'
-            b'<key>CFBundleShortVersionString</key><string>10.0</string>\n'
-            b'<key>CFBundleSignature</key><string>????</string>\n'
-            b'<key>CFBundleVersion</key><string>10.0</string>\n'
-            b'<key>NSPrincipalClass</key><string>WineApplication</string>\n'
-            b'<key>LSApplicationCategoryType</key><string>public.app-category.games</string>\n'
-            b'<key>LSSupportsGameMode</key><true/>\n'
-            b'<key>GCSupportsGameMode</key><true/>\n'
-        )
-        closing = b'</dict>\n</plist>\n'
-        pad_len = orig_len - len(new_plist) - len(closing)
-        if pad_len >= 0:
-            patched_plist = new_plist + (b" " * pad_len) + closing
-            assert len(patched_plist) == orig_len
-            wine_bin.write_bytes(wine_bytes[:plist_start] + patched_plist + wine_bytes[plist_end:])
-            subprocess.run(["codesign", "--force", "--sign", "-", str(wine_bin)], check=True)
+        import plistlib
+        info = plistlib.loads(wine_bytes[plist_start:plist_end])
+        for key in ["LSUIElement", "LSBackgroundOnly", "CFBundleSignature", "CFBundleAllowMixedLocalizations", "CFBundleDevelopmentRegion", "CFBundleInfoDictionaryVersion"]:
+            info.pop(key, None)
+        info.update(LSApplicationCategoryType="public.app-category.games", LSSupportsGameMode=True, GCSupportsGameMode=True)
+        compact = plistlib.dumps(info).replace(b"\n", b"").replace(b"\t", b"")
+        if len(compact) > orig_len:
+            raise RuntimeError("Game Mode plist does not fit in Wine executable")
+        patched_plist = compact + b" " * (orig_len - len(compact))
+        wine_bin.write_bytes(wine_bytes[:plist_start] + patched_plist + wine_bytes[plist_end:])
+        subprocess.run(["codesign", "--force", "--sign", "-", str(wine_bin)], check=True)
 
 spec = importlib.util.spec_from_file_location("identity_patch", root / "scripts/patch-dxmt-identity.py")
 patcher = importlib.util.module_from_spec(spec)
@@ -141,4 +126,5 @@ manifest = {"artifacts": [{"file": n, "url": u, "sha256": h} for n, u, h in arti
             "gameMode": True,
             "supportedTest": "Global DX11 Mode (DXMT to Metal) and DX12 Mode (VKD3D + MoltenVK to Metal)"}
 (resources / "runtime-manifest.json").write_text(json.dumps(manifest, indent=2))
+subprocess.run(["/usr/bin/python3", str(root / "scripts/prepare-gstreamer.py"), str(runtime)], check=True)
 print("Prepared bundled Metal runtime and Windows game", flush=True)

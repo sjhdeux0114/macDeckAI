@@ -1,0 +1,3 @@
+PASS: Vulkan and VKD3D error lines retained
+PASS: raw Steam, credential and URL lines excluded
+PASS: collector drains input and exits on EOF

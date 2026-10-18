@@ -256,6 +256,8 @@ struct LibraryData: Codable {
     var games: [Game] = []
     var winePath = ""
     var startSteamOnLaunch: Bool? = nil
+    var steamGPUAcceleration: Bool? = nil
+    var showMetalHUD: Bool? = nil
     var externalLibraries: [ExternalLibrary]? = nil
     var graphicsBackend: GraphicsBackend? = nil
     var autoUpdateRuntime: Bool? = nil
@@ -334,16 +336,31 @@ struct LaunchPlan {
             executable = URL(fileURLWithPath: wine)
             arguments.insert(game.path, at: 0)
             environment["WINEPREFIX"] = disk.prefix(for: game).path
-            environment["WINEDEBUG"] = "-all"
+            environment["WINEDEBUG"] = "-all,warn+vkd3d,err+vkd3d,warn+vulkan,err+vulkan"
+            if environment["MACDECK_TRACE_EXCEPTIONS"] == "1" {
+                environment["WINEDEBUG", default: ""] += ",trace+seh,warn+mfplat,err+mfplat,warn+mfreadwrite,err+mfreadwrite,warn+mf,err+mf,warn+winegstreamer,err+winegstreamer,trace+mfreadwrite"
+                environment["GST_DEBUG"] = "2"
+                environment["GST_DEBUG_NO_COLOR"] = "1"
+            }
             environment["WINEDLLOVERRIDES"] = DirectX12Support.dllOverrides(for: mode)
             environment["DYLD_FALLBACK_LIBRARY_PATH"] = URL(fileURLWithPath: wine).resolvingSymlinksInPath()
                 .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib").path
+            let media = URL(fileURLWithPath: wine).resolvingSymlinksInPath()
+                .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Media")
+            if FileManager.default.fileExists(atPath: media.appendingPathComponent("lib/libgstreamer-1.0.0.dylib").path) {
+                environment["DYLD_FALLBACK_LIBRARY_PATH", default: ""] += ":" + media.appendingPathComponent("lib").path
+                environment["GST_PLUGIN_SYSTEM_PATH_1_0"] = media.appendingPathComponent("lib/gstreamer-1.0").path
+                environment["GST_PLUGIN_SCANNER_1_0"] = media.appendingPathComponent("libexec/gstreamer-1.0/gst-plugin-scanner").path
+                environment["GST_REGISTRY_1_0"] = disk.logs.appendingPathComponent("gst-registry-x86_64.bin").path
+            }
             environment["DXMT_LOG_LEVEL"] = "info"
             environment["DXMT_LOG_PATH"] = disk.logs.path
-            environment["MTL_HUD_ENABLED"] = "1"
+            environment["MTL_HUD_ENABLED"] = (loaded?.showMetalHUD ?? false) ? "1" : "0"
             environment["SDL_RENDER_DRIVER"] = "direct3d11"
             if mode == .d3d12 {
-                environment["MVK_CONFIG_RESUME_LOST_DEVICE"] = "1"
+                // Surface device loss to the game. Continuing after a GPU timeout
+                // left RE3 submitting invalid work and hanging on a black screen.
+                environment["MVK_CONFIG_RESUME_LOST_DEVICE"] = "0"
             }
         } else if game.kind == .executable {
             executable = URL(fileURLWithPath: game.path)

@@ -556,33 +556,17 @@ enum RuntimeUpdater {
             return wineBytes
         }
         let origLen = endRange.upperBound - startRange.lowerBound
-        let plistLines = [
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
-            "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">",
-            "<plist version=\"1.0\">",
-            "<dict>",
-            "<key>CFBundleAllowMixedLocalizations</key><true/>",
-            "<key>CFBundleDevelopmentRegion</key><string>English</string>",
-            "<key>CFBundleExecutable</key><string>wine</string>",
-            "<key>CFBundleIdentifier</key><string>org.winehq.wine</string>",
-            "<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>",
-            "<key>CFBundleName</key><string>Wine</string>",
-            "<key>CFBundlePackageType</key><string>APPL</string>",
-            "<key>CFBundleShortVersionString</key><string>10.0</string>",
-            "<key>CFBundleSignature</key><string>????</string>",
-            "<key>CFBundleVersion</key><string>10.0</string>",
-            "<key>NSPrincipalClass</key><string>WineApplication</string>",
-            "<key>LSApplicationCategoryType</key><string>public.app-category.games</string>",
-            "<key>LSSupportsGameMode</key><true/>",
-            "<key>GCSupportsGameMode</key><true/>"
-        ]
-        let newPlist = Data((plistLines.joined(separator: "\n") + "\n").utf8)
-        let closing = Data("</dict>\n</plist>\n".utf8)
-        let padLen = origLen - newPlist.count - closing.count
-        guard padLen >= 0 else { return wineBytes }
+        guard var plist = (try? PropertyListSerialization.propertyList(from: wineBytes.subdata(in: startRange.lowerBound..<endRange.upperBound), format: nil)) as? [String: Any] else { return wineBytes }
+        for key in ["LSUIElement", "LSBackgroundOnly", "CFBundleSignature", "CFBundleAllowMixedLocalizations", "CFBundleDevelopmentRegion", "CFBundleInfoDictionaryVersion"] { plist.removeValue(forKey: key) }
+        plist["LSApplicationCategoryType"] = "public.app-category.games"
+        plist["LSSupportsGameMode"] = true
+        plist["GCSupportsGameMode"] = true
+        guard let xml = try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0),
+              let text = String(data: xml, encoding: .utf8) else { return wineBytes }
+        let compact = Data(text.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: "\t", with: "").utf8)
+        guard compact.count <= origLen else { return wineBytes }
         var patched = wineBytes
-        let replacement = newPlist + Data(repeating: 0x20, count: padLen) + closing
-        patched.replaceSubrange(startRange.lowerBound..<endRange.upperBound, with: replacement)
+        patched.replaceSubrange(startRange.lowerBound..<endRange.upperBound, with: compact + Data(repeating: 0x20, count: origLen - compact.count))
         return patched
     }
 

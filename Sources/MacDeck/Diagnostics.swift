@@ -57,12 +57,12 @@ final class SessionDiagnostics {
             kind: kind, started: started, appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development",
             gpu: MTLCreateSystemDefaultDevice()?.name, operatingSystem: ProcessInfo.processInfo.operatingSystemVersionString, wine: game.kind == .windows ? plan.executable.path : nil,
             executable: game.path, arguments: steam ? [] : Self.safeArguments(game.arguments), workingDirectory: plan.workingDirectory.path,
-            environment: plan.environment.filter { ["WINEPREFIX", "WINEDLLOVERRIDES", "WINEDEBUG", "DXMT_LOG_LEVEL", "MTL_HUD_ENABLED", "SDL_RENDER_DRIVER"].contains($0.key) },
+            environment: plan.environment.filter { ["WINEPREFIX", "WINEDLLOVERRIDES", "WINEDEBUG", "DXMT_LOG_LEVEL", "MTL_HUD_ENABLED", "SDL_RENDER_DRIVER", "MVK_CONFIG_RESUME_LOST_DEVICE"].contains($0.key) },
             status: "prepared", notes: [])
         if game.steamAppID != nil {
             record.relatedSteamSessionID = Self.entries(disk: disk).first { $0.record.kind == "steam-client" && $0.record.environment["WINEPREFIX"] == plan.environment["WINEPREFIX"] }?.record.sessionID
         }
-        if steam { record.notes.append("Steam stdout/stderr and launch arguments are excluded to protect authentication data.") }
+        if steam { record.notes.append("Steam stdout, raw stderr and launch arguments are excluded. A separate filter retains only allowlisted Vulkan/MoltenVK graphics errors to protect authentication data.") }
         if game.steamAppID != nil { record.notes.append("This process sends a Steam launch request. Its exit code is not the game's exit code. Graphics logs belong to the running Steam client session.") }
         record.notes.append("Last recorded process state only; application termination can prevent the final status update.")
         try FileManager.default.createDirectory(at: renderer, withIntermediateDirectories: true)
@@ -115,9 +115,12 @@ final class SessionDiagnostics {
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
         let record = try decoder.decode(SessionRecord.self, from: Data(contentsOf: folder.appendingPathComponent("diagnostics.json")))
         let patterns: [(String, String)] = [
+            ("code=c0000005", "메모리 접근 위반 예외입니다. 예외 주소와 로드된 모듈을 비교해야 하며 이 코드만으로 GPU 또는 영상 재생 문제로 확정할 수 없습니다."),
+            ("gpu timeout", "Metal GPU 작업 시간 초과가 기록됐습니다. 이후 VK_ERROR_DEVICE_LOST가 있으면 렌더링을 계속할 수 없는 상태일 수 있습니다. Game Mode Off와 구분해 셰이더/명령 제출 경로를 조사하세요."),
             ("createmetalview", "Metal 화면 생성 경로를 확인하세요."),
             ("17399d75-964e-4c03-99f8-9d4fd196dd62", "Direct3D 12 어댑터 인터페이스(IWineDXGIAdapter) 조회 단서입니다. 게임 실행 설정에서 DirectX 12(VKD3D · MoltenVK) 백엔드와 D3D12용 dxgi.dll 적용 상태를 확인하세요."),
             ("d3d12createdevicefailed", "Direct3D 12 장치 생성 실패 단서입니다. MoltenVK(libvulkan.1.dylib) 연결 및 D3D12 백엔드 구성을 확인하세요."),
+            ("vk_error_device_lost", "Vulkan GPU 장치 손실 단서입니다. MoltenVK 오류와 직전 셰이더/커맨드 제출 로그를 함께 확인하세요."),
             ("dxgi_error_device_removed", "GPU 장치 손실이 기록됐습니다. GPU/셰이더 로그와 재현 상황을 함께 확인하세요."),
             ("dxgi_error_device_hung", "GPU 작업 정지가 기록됐습니다. 셰이더와 프레임 제출 경로를 확인하세요."),
             ("failed to compile", "컴파일 실패 단서입니다. 해당 셰이더/오류 메시지를 확인하세요."),

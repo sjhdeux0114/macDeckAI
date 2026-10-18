@@ -1,0 +1,14 @@
+PASS factory: decodebin
+PASS factory: asfdemux
+PASS factory: avdec_wmv2
+PASS factory: avdec_wmv3
+PASS factory: avdec_wmav2
+PASS factory: deinterlace
+PASS factory: videoconvert
+PASS factory: videoflip
+PASS factory: audioconvert
+PASS factory: audioresample
+PASS factory: appsink
+PASS factory: appsrc
+PASS ASF decode + Wine video post-processing chain
+PASS audio conversion chain
