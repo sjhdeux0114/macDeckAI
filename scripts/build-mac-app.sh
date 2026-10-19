@@ -15,8 +15,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>dev.macdeck.app</string>
 <key>CFBundleExecutable</key><string>MacDeck</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.5.5</string>
-<key>CFBundleVersion</key><string>12</string>
+<key>CFBundleShortVersionString</key><string>0.5.7</string>
+<key>CFBundleVersion</key><string>14</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundleIconName</key><string>AppIcon</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>

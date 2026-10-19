@@ -11,3 +11,9 @@ evidence/steam-setup/big-picture-login.png
 *.token
 *.auth
 *.credential
+
+# Local installers, shader caches and generated diagnostics (retain on disk)
+*.dmg
+*.dxvk-cache
+logs/
+evidence/

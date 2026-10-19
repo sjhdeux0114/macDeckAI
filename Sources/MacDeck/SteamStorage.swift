@@ -142,11 +142,36 @@ struct SteamStorage {
         return String(decoding: try Data(contentsOf: capture), as: UTF8.self)
     }
     func isRunning(wine: String) async throws -> Bool {
-        let text = try await command(client.prefix.appendingPathComponent("drive_c/windows/system32/tasklist.exe"), arguments: ["/fo", "csv", "/nh"], wine: wine)
-        guard text.contains("\",\"") else { throw DeckError.message("Windows 프로세스 상태를 확인하지 못해 설정을 보존했습니다.") }
-        return text.lowercased().components(separatedBy: .newlines).contains { $0.hasPrefix("\"steam.exe\",") }
+        // A Wine tasklist probe boots a stopped prefix (including Windows startup
+        // entries). Native process inspection must never revive a force-quit Steam.
+        guard let executable = client.executable else { return false }
+        let process = Process(), pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-axo", "command="]
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        let bytes = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw DeckError.message("Steam 프로세스 상태를 확인하지 못했습니다.") }
+        return Self.containsSteamProcess(String(decoding: bytes, as: UTF8.self), executable: executable.path)
     }
+
+    static func containsSteamProcess(_ listing: String, executable: String) -> Bool {
+        listing.components(separatedBy: .newlines).contains { line in
+            let command = line.trimmingCharacters(in: .whitespaces)
+            let windowsCommands = ["C:\\Program Files (x86)\\Steam\\steam.exe", "C:\\Program Files\\Steam\\steam.exe"]
+            if windowsCommands.contains(where: { command.lowercased() == $0.lowercased() || command.lowercased().hasPrefix($0.lowercased() + " ") }) { return true }
+            return command == executable || command.hasPrefix(executable + " ")
+                || command.hasSuffix(" " + executable) || command.contains(" " + executable + " ")
+        }
+    }
+
     func killPrefixProcesses(wine: String) {
+        killPrefix(client.prefix, wine: wine)
+    }
+
+    func killPrefix(_ prefix: URL, wine: String) {
         let server = URL(fileURLWithPath: wine).resolvingSymlinksInPath()
             .deletingLastPathComponent().appendingPathComponent("wineserver")
         guard FileManager.default.isExecutableFile(atPath: server.path) else { return }
@@ -154,7 +179,7 @@ struct SteamStorage {
         process.executableURL = server
         process.arguments = ["-k"]
         var env = ProcessInfo.processInfo.environment
-        env["WINEPREFIX"] = client.prefix.path
+        env["WINEPREFIX"] = prefix.path
         env["DYLD_FALLBACK_LIBRARY_PATH"] = server.deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("lib").path
         process.environment = env

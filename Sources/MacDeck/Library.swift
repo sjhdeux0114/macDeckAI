@@ -39,6 +39,20 @@ enum GraphicsBackend: String, Codable, CaseIterable {
     }
 }
 
+enum D3D9Mode: String, Codable, CaseIterable {
+    case automatic = "auto"
+    case builtin = "builtin"
+    case native = "native"
+
+    var label: String {
+        switch self {
+        case .automatic: return "자동 (게임 폴더 d3d9.dll 우선 감지)"
+        case .builtin: return "WineD3D (기본 내장 렌더러)"
+        case .native: return "Native D9VK (Vulkan → Metal 하드웨어 가속)"
+        }
+    }
+}
+
 struct Game: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String
@@ -51,6 +65,9 @@ struct Game: Codable, Identifiable, Equatable {
     var steamAppID: String? = nil
     var installedLocation: String? = nil
     var graphicsBackend: GraphicsBackend? = nil
+    var d3d9Mode: D3D9Mode? = nil
+    var runtimePath: String? = nil
+    var trialAppID: String? = nil
 
     static func importing(_ url: URL) throws -> Game {
         let path = url.standardizedFileURL.path
@@ -146,41 +163,32 @@ enum DirectX12Support {
         return header.range(of: wineNativeMarker) != nil || header.range(of: wineBuiltinMarker) != nil
     }
 
-    static func syncGameDirectory(_ root: URL, mode: GraphicsBackend) {
-        guard FileManager.default.fileExists(atPath: root.path) else { return }
-        let dirs = executableDirectories(in: root)
-        for dir in dirs {
-            let deployedDXGI = dir.appendingPathComponent("dxgi.dll")
-            if isManagedDXGI(deployedDXGI) {
-                try? FileManager.default.removeItem(at: deployedDXGI)
-            }
-            guard let items = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else { continue }
-            for item in items where item.pathExtension.lowercased() == "ini" {
-                guard let content = try? String(contentsOf: item, encoding: .utf8) else { continue }
-                var updated = content
-                if mode == .dxmt {
-                    updated = updated
-                        .replacingOccurrences(of: "Capability=DirectX12", with: "Capability=DirectX11")
-                        .replacingOccurrences(of: "TargetPlatform=DirectX12", with: "TargetPlatform=DirectX11")
-                } else {
-                    updated = updated
-                        .replacingOccurrences(of: "Capability=DirectX11", with: "Capability=DirectX12")
-                        .replacingOccurrences(of: "TargetPlatform=DirectX11", with: "TargetPlatform=DirectX12")
-                }
-                if updated != content {
-                    try? updated.write(to: item, atomically: true, encoding: .utf8)
-                }
-            }
-        }
-    }
-
     static func syncPrefix(_ prefix: URL, mode: GraphicsBackend, runtimeRoot: URL?) {
+        if let root = runtimeRoot, SharedSteamRuntime.isRuntime(root.appendingPathComponent("bin/wine").path) { return }
         let sysReg = prefix.appendingPathComponent("system.reg")
-        if let regText = try? String(contentsOf: sysReg, encoding: .utf8),
-           regText.contains("[Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\AeDebug]") && regText.contains("\"Auto\"=\"0\"") {
-            let fixed = regText.replacingOccurrences(of: "\"Auto\"=\"0\"", with: "\"Auto\"=\"1\"")
+        if let regText = try? String(contentsOf: sysReg, encoding: .utf8) {
+            var fixed = regText
+            if fixed.contains("[Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\AeDebug]") && fixed.contains("\"Auto\"=\"0\"") {
+                fixed = fixed.replacingOccurrences(of: "\"Auto\"=\"0\"", with: "\"Auto\"=\"1\"")
+            }
             if fixed != regText {
                 try? fixed.write(to: sysReg, atomically: true, encoding: .utf8)
+            }
+        }
+        let userReg = prefix.appendingPathComponent("user.reg")
+        if let regText = try? String(contentsOf: userReg, encoding: .utf8) {
+            var updated = regText
+            if !updated.contains("\"VideoMemorySize\"") {
+                updated += "\n[Software\\\\Wine\\\\Direct3D]\n\"VideoMemorySize\"=\"2048\"\n"
+            }
+            if !updated.contains("\"EnableGameOverlay\"") {
+                updated += "\n[Software\\\\Valve\\\\Steam]\n\"EnableGameOverlay\"=dword:00000000\n"
+            }
+            if !updated.contains("\"gameoverlayrenderer\"") {
+                updated += "\n[Software\\\\Wine\\\\DllOverrides]\n\"gameoverlayrenderer\"=\"\"\n\"gameoverlayrenderer64\"=\"\"\n"
+            }
+            if updated != regText {
+                try? updated.write(to: userReg, atomically: true, encoding: .utf8)
             }
         }
         guard let root = runtimeRoot else { return }
@@ -215,6 +223,7 @@ enum DirectX12Support {
 
     @discardableResult
     static func applyGlobal(mode: GraphicsBackend, wine: String?, games: [Game] = [], disk: LibraryDisk = .standard) -> GraphicsBackend {
+        if SharedSteamRuntime.isRuntime(wine) { return mode }
         let root = runtimeRoot(forWine: wine)
         if let root {
             let sourceFolder = mode == .d3d12 ? "dxgi-d3d12" : "dxgi-dxmt"
@@ -230,14 +239,6 @@ enum DirectX12Support {
             }
         }
         var syncedPrefixes: Set<String> = []
-        if let bottleDirs = try? FileManager.default.contentsOfDirectory(at: disk.bottles, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
-            for bottle in bottleDirs {
-                let path = bottle.standardizedFileURL.path
-                if syncedPrefixes.insert(path).inserted {
-                    syncPrefix(bottle, mode: mode, runtimeRoot: root)
-                }
-            }
-        }
         for game in games {
             if game.kind == .windows {
                 let prefix = disk.prefix(for: game)
@@ -246,26 +247,24 @@ enum DirectX12Support {
                     syncPrefix(prefix, mode: mode, runtimeRoot: root)
                 }
             }
-            if let dir = targetDirectory(for: game) {
-                syncGameDirectory(dir, mode: mode)
-            }
+
         }
         return mode
     }
 
-    static func dllOverrides(for mode: GraphicsBackend) -> String {
-        let common = "winemenubuilder.exe=d;winedbg.exe=d;mscoree,mshtml=;"
-            + "UnityCrashHandler32.exe=d;UnityCrashHandler64.exe=d;"
-            + "CrashReportClient.exe=d;CrashReportClientEditor.exe=d;"
-            + "OriginCrashReporter.exe=d;EACrashReporter.exe=d;CryCrashHandler.exe=d;"
-            + "easyanticheat_x64=d;EasyAntiCheat=d;"
+    static func dllOverrides(for mode: GraphicsBackend, d3d9Mode: D3D9Mode = .builtin) -> String {
+        let d3d9Override: String
+        switch d3d9Mode {
+        case .native:
+            d3d9Override = "d3d9=n,b;d3dx9_24,d3dx9_25,d3dx9_26,d3dx9_27,d3dx9_28,d3dx9_29,d3dx9_30,d3dx9_31,d3dx9_32,d3dx9_33,d3dx9_34,d3dx9_35,d3dx9_36,d3dx9_37,d3dx9_38,d3dx9_39,d3dx9_40,d3dx9_41,d3dx9_42,d3dx9_43=b;"
+        case .builtin, .automatic:
+            d3d9Override = "d3d9=b;"
+        }
+        let common = "winemenubuilder.exe=d;winedbg.exe=d;mscoree,mshtml=;gameoverlayrenderer,gameoverlayrenderer64=d;"
             + "xinput1_1,xinput1_2,xinput1_3,xinput1_4,xinput9_1_0=b;"
-            + "dinput=b;dinput8=b;"
-            + "d3dcompiler_43,d3dcompiler_47=b;"
             + "xaudio2_0,xaudio2_1,xaudio2_2,xaudio2_3,xaudio2_4,xaudio2_5,xaudio2_6,xaudio2_7,xaudio2_8,xaudio2_9,x3daudio1_0,x3daudio1_1,x3daudio1_2,x3daudio1_3,x3daudio1_4,x3daudio1_5,x3daudio1_6,x3daudio1_7=b;dsound=b;"
             + "mfplat,mfreadwrite,mf,mfmediaengine,winegstreamer=b;quartz,amstream=b;"
-            + "nvapi,nvapi64,nvngx=_nvngx=d;"
-            + "d3d9=b;"
+            + d3d9Override
         switch mode {
         case .dxmt:
             return common + "d3d11,dxgi,d3d10core,d3d12,d3d12core,vulkan-1,winevulkan,winemetal=b"
@@ -282,6 +281,7 @@ struct LibraryData: Codable {
     var startSteamOnLaunch: Bool? = nil
     var steamGPUAcceleration: Bool? = nil
     var showMetalHUD: Bool? = nil
+    var sharedSteamRenderer: Bool? = nil
     var externalLibraries: [ExternalLibrary]? = nil
     var graphicsBackend: GraphicsBackend? = nil
     var autoUpdateRuntime: Bool? = nil
@@ -347,7 +347,8 @@ struct LaunchPlan {
     var environment: [String: String]
     var workingDirectory: URL
 
-    static func make(game: Game, wine: String?, disk: LibraryDisk) throws -> LaunchPlan {
+    static func make(game: Game, wine: String?, disk: LibraryDisk, verifyProfile: Bool = true) throws -> LaunchPlan {
+        let wine = game.runtimePath ?? wine
         guard FileManager.default.fileExists(atPath: game.path) else { throw DeckError.message("게임 파일이 이동되었거나 삭제되었습니다. 편집에서 경로를 다시 선택해 주세요.") }
         var environment = ProcessInfo.processInfo.environment
         let executable: URL
@@ -355,18 +356,25 @@ struct LaunchPlan {
         if game.kind == .windows {
             guard let wine, FileManager.default.isExecutableFile(atPath: wine) else { throw DeckError.message("런타임 탭에서 macOS용 Wine 실행 파일을 선택해 주세요.") }
             let loaded = try? disk.load()
-            let mode = loaded?.graphicsBackend ?? game.graphicsBackend ?? .dxmt
-            DirectX12Support.applyGlobal(mode: mode, wine: wine, games: (loaded?.games ?? []) + [game], disk: disk)
+            let mode = game.graphicsBackend ?? loaded?.graphicsBackend ?? .dxmt
+            // A prepared Apple trial owns its complete DLL/Unix bridge set.
+            // Generic DXMT/DXGI switching would replace Apple's DXGI after import.
+            let appleTrial = game.trialAppID == "1245620" && (try? GameTrial.load(id: "1245620", disk: disk)?.backend) == "Apple-D3DMetal"
+            if !appleTrial { DirectX12Support.applyGlobal(mode: mode, wine: wine, games: [game], disk: disk) }
             executable = URL(fileURLWithPath: wine)
             arguments.insert(game.path, at: 0)
             environment["WINEPREFIX"] = disk.prefix(for: game).path
-            environment["WINEDEBUG"] = "-all,warn+vkd3d,err+vkd3d,warn+vulkan,err+vulkan"
+            if let id = game.steamAppID, URL(fileURLWithPath: game.path).lastPathComponent.lowercased() != "steam.exe" {
+                environment["SteamAppId"] = id; environment["SteamGameId"] = id
+            }
+            environment["WINEDEBUG"] = "-all,err+seh,warn+vkd3d,err+vkd3d,warn+vulkan,err+vulkan,warn+d3d,err+d3d,warn+d3d9,err+d3d9"
             if environment["MACDECK_TRACE_EXCEPTIONS"] == "1" {
                 environment["WINEDEBUG", default: ""] += ",trace+seh,warn+mfplat,err+mfplat,warn+mfreadwrite,err+mfreadwrite,warn+mf,err+mf,warn+winegstreamer,err+winegstreamer,trace+mfreadwrite"
                 environment["GST_DEBUG"] = "2"
                 environment["GST_DEBUG_NO_COLOR"] = "1"
             }
-            environment["WINEDLLOVERRIDES"] = DirectX12Support.dllOverrides(for: mode)
+            let effectiveD3D9: D3D9Mode = game.d3d9Mode ?? .automatic
+            environment["WINEDLLOVERRIDES"] = DirectX12Support.dllOverrides(for: mode, d3d9Mode: effectiveD3D9)
             environment["DYLD_FALLBACK_LIBRARY_PATH"] = URL(fileURLWithPath: wine).resolvingSymlinksInPath()
                 .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib").path
             let media = URL(fileURLWithPath: wine).resolvingSymlinksInPath()
@@ -383,44 +391,95 @@ struct LaunchPlan {
                 }
                 environment["GST_REGISTRY_1_0"] = userRegistry.path
             }
-            let is32Bit = DirectX12Support.is32BitWindowsBinary(at: URL(fileURLWithPath: game.path))
+            // 32-bit WoW64 binaries require server waits to prevent sync crashes.
+            // 64-bit binaries (including 64-bit Steam Big Picture and steamwebhelper)
+            // utilize Mach-message MSync for high-performance multithreading and fluid UI.
+            var is32Bit = DirectX12Support.is32BitWindowsBinary(at: URL(fileURLWithPath: game.path))
+            if !is32Bit, let location = game.installedLocation {
+                let dir = URL(fileURLWithPath: location)
+                let executables = DirectX12Support.executableDirectories(in: dir)
+                for exeDir in executables {
+                    if let items = try? FileManager.default.contentsOfDirectory(at: exeDir, includingPropertiesForKeys: nil) {
+                        for item in items where item.pathExtension.lowercased() == "exe" {
+                            if DirectX12Support.is32BitWindowsBinary(at: item) {
+                                is32Bit = true
+                                break
+                            }
+                        }
+                    }
+                    if is32Bit { break }
+                }
+            }
             if is32Bit {
                 environment["WINEMSYNC"] = "0"
+                environment.removeValue(forKey: "WINEMSYNC_QLIMIT")
+                environment["WINE_LARGE_ADDRESS_AWARE"] = "0"
             } else {
                 environment["WINEMSYNC"] = "1"
                 environment["WINEMSYNC_QLIMIT"] = "512"
+                if game.path.lowercased().hasSuffix("steam.exe") && game.steamAppID == nil {
+                    environment.removeValue(forKey: "WINE_LARGE_ADDRESS_AWARE")
+                } else {
+                    environment["WINE_LARGE_ADDRESS_AWARE"] = "1"
+                }
             }
-            environment["WINEESYNC"] = "1"
-            environment["WINE_LARGE_ADDRESS_AWARE"] = "1"
+            // ESync caused spinning device-service threads in the local x86 trial.
+            // Use Wine server waits when MSync is off; retain MSync for direct x64.
+            environment["WINEESYNC"] = "0"
             environment["DXMT_LOG_LEVEL"] = "info"
             environment["DXMT_LOG_PATH"] = disk.logs.path
-            environment["DXMT_CONFIG"] = "d3d11.ignoreMapFlagNoWait=True;dxgi.handleAltTab=True;d3d11.maxTessFactor=64"
-            environment["WINE_D3D_CONFIG"] = "renderer=vulkan,csmt=0"
+            environment["DXVK_LOG_PATH"] = disk.logs.path
+            environment["DXVK_LOG_LEVEL"] = environment["DXVK_LOG_LEVEL"] ?? "info"
+            // DO_NOT_WAIT workarounds are game-specific; preserve normal map semantics.
+            environment["DXMT_CONFIG"] = environment["DXMT_CONFIG"] ?? "dxgi.handleAltTab=True"
+            if effectiveD3D9 == .native {
+                // When native D9VK is active, write managed dxvk.conf with 2GB VRAM cap to avoid 32-bit integer overflow
+                try? FileManager.default.createDirectory(at: disk.logs, withIntermediateDirectories: true)
+                let dxvkConf = disk.logs.appendingPathComponent("dxvk-" + game.id.uuidString + ".conf")
+                let conf = """
+                d3d9.maxFrameRate = 60
+                d3d9.presentInterval = 1
+                d3d9.tearFree = False
+                d3d9.deferSurfaceCreation = False
+                d3d9.maxAvailableMemory = 2048
+                d3d9.samplerAnisotropy = 1
+                d3d9.customVendorId = 10de
+                d3d9.customDeviceId = 1200
+                d3d9.dpiAware = True
+                """
+                try? conf.write(to: dxvkConf, atomically: true, encoding: .utf8)
+                environment["DXVK_CONFIG_FILE"] = dxvkConf.path
+                environment["DXVK_STATE_CACHE_PATH"] = disk.logs.path
+            } else {
+                environment["WINE_D3D_CONFIG"] = "renderer=vulkan"
+            }
             let hudEnabled = loaded?.showMetalHUD ?? true
             environment["MTL_HUD_ENABLED"] = hudEnabled ? "1" : "0"
             environment["SDL_RENDER_DRIVER"] = "direct3d11"
             environment["SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS"] = "0"
-            if hudEnabled {
-                let launchctl = Process()
-                launchctl.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-                launchctl.arguments = ["setenv", "MTL_HUD_ENABLED", "1"]
-                try? launchctl.run()
-            }
             if mode == .d3d12 {
                 // Surface device loss to the game. Continuing after a GPU timeout
                 // left RE3 submitting invalid work and hanging on a black screen.
                 environment["MVK_CONFIG_RESUME_LOST_DEVICE"] = "0"
                 environment["MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS"] = "1"
-                environment["MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS"] = "3"
-                environment["VKD3D_FEATURE_LEVEL"] = "12_1"
-                environment["VKD3D_CONFIG"] = "no_upload_hlist,virtual_heaps"
+                // Prefill requires application-side assumptions and conflicts with
+                // update-after-bind. Do not fabricate feature levels or mix Wine
+                // VKD3D and vkd3d-proton-specific workarounds globally.
+                environment["MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS"] = "0"
             }
         } else if game.kind == .executable {
             executable = URL(fileURLWithPath: game.path)
         } else {
             throw DeckError.message("macOS 앱 번들은 Launch Services로 실행해야 합니다.")
         }
-        return LaunchPlan(executable: executable, arguments: arguments, environment: environment,
+        try GameTrial.configure(game: game, disk: disk, environment: &environment)
+        try SharedSteamRuntime.configure(wine: wine ?? "", environment: &environment)
+        if let prefix = environment["WINEPREFIX"] { try DependencyInstaller.applyCLRPolicy(prefix: URL(fileURLWithPath: prefix), environment: &environment) }
+        let profiles = GameProfileStore(disk: disk)
+        try profiles.apply(game, environment: &environment)
+        let plan = LaunchPlan(executable: executable, arguments: arguments, environment: environment,
                           workingDirectory: URL(fileURLWithPath: game.path).deletingLastPathComponent())
+        if verifyProfile { try profiles.verify(game, plan: plan) }
+        return plan
     }
 }

@@ -87,9 +87,9 @@ struct SteamClient {
             .first { FileManager.default.fileExists(atPath: $0.appendingPathComponent("steam.exe").path) }
     }
     var executable: URL? { root?.appendingPathComponent("steam.exe") }
-    static let arguments = ["-gamepadui", "-no-cef-sandbox", "-cef-disable-gpu", "-cef-disable-gpu-compositing"]
+    static let arguments = ["-gamepadui", "-no-cef-sandbox", "-cef-disable-gpu", "-cef-disable-gpu-compositing", "steam://open/bigpicture"]
     static func arguments(gpuAcceleration: Bool) -> [String] {
-        gpuAcceleration ? ["-gamepadui", "-no-cef-sandbox", "-cef-force-gpu"] : arguments
+        gpuAcceleration ? ["-gamepadui", "-no-cef-sandbox", "-cef-force-gpu", "steam://open/bigpicture"] : arguments
     }
 
     func entry() throws -> Game {

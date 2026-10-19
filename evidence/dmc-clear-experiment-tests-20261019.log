@@ -1,0 +1,173 @@
+PASS: new library starts empty
+PASS: legacy VC2005/2008 wrappers use their supported quiet syntax without changing newer installer options
+PASS: .NET4 full bootstrapper passes the quiet option to its inner installer
+PASS: dependency VDF resolves the exact VC2005 architecture without executing its command
+PASS: VC2015-2022 uses its compatible catalog family and preserves x64
+PASS: ambiguous packages and arbitrary installer commands are not executable requirements
+PASS: DmC bundled .NET4 client requirements resolve without guessing from game names
+PASS: .NET4 in-place families coalesce to the highest requested version and preserve source App IDs
+PASS: game installscript arguments never become installer arguments
+PASS: prefixes without an installed CLR policy keep their launch environment unchanged
+PASS: CLR activation removes only the veto and preserves graphics and synchronization settings
+PASS: an MZ placeholder cannot satisfy runtime installation detection
+PASS: redistributable catalog has unique IDs and HTTPS SHA256 pins
+PASS: dependency maintenance refuses a game running in the same prefix
+PASS: Steamworks shared installer inventory is not treated as every game's requirements
+PASS: malformed PE headers cannot synthesize redistributable requirements
+PASS: CLR executable detection does not install Windows .NET for Unity/Mono managed DLLs
+PASS: normal-game baselines detect a shared redistributable change without auto-approving it
+PASS: dependency tracking never touches another prefix
+PASS: profiles cannot inject arbitrary packages into automatic dependency installation
+PASS: library preserves identities, paths and literal arguments
+PASS: Windows arguments are passed directly without a shell
+PASS: Metal HUD defaults enabled so Fn+Shift+F9 shortcut functions and Metal stats are visible
+PASS: Metal HUD can be explicitly disabled in settings
+PASS: global overrides preserve game input proxies, anti-cheat and engine crash reporting
+PASS: Windows launch plan enables MSync for direct x64, disables ESync, and enables large address awareness
+PASS: WineD3D configures Vulkan renderer with multithreaded command stream for Direct3D 9 GPU acceleration
+PASS: 32-bit Windows games use server waits and 2GB address cap for non-LAA safety
+PASS: Steam game with 32-bit binary in installedLocation sets WINEMSYNC=0
+PASS: game-specific graphicsBackend overrides global graphics backend
+PASS: Windows launch plan overrides XAudio2 and DirectSound to Wine builtins
+PASS: game with native D3D9Mode enables d3d9=n,b override without WineD3D Vulkan override
+PASS: game with native D3D9Mode configures DXVK_CONFIG_FILE and builtin D3DX9 fallback
+PASS: Windows launch plan overrides Media Foundation and DirectShow to Wine builtins
+PASS: DXMT preserves NO_WAIT semantics and enables Alt-Tab handling
+PASS: SDL games use the Direct3D 11 path
+PASS: native DXVK/D9VK logs have a managed destination
+PASS: compatibility report separates engine, DX9, anti-cheat and proxy evidence
+PASS: game names do not classify engines and scan limits remain visible
+PASS: truncated PE files do not invent graphics imports
+PASS: bounded PE parsing resolves a real import descriptor through its section RVA
+PASS: launch plan executes without evaluating injected shell syntax
+PASS: invalid Windows executable is rejected
+PASS: corrupt library is rejected without overwriting it
+PASS: corrupt library remains intact
+PASS: Steam install is detected in the dedicated prefix
+PASS: fixture Steam host is genuinely x64 while the game fixture is x86
+PASS: Steam 64-bit host enables MSync for smooth Big Picture multithreading without ESync polling
+PASS: Steam launches Big Picture in its persistent prefix
+PASS: Steam GPU acceleration removes both software-rendering overrides and retains a reversible fallback
+PASS: Steam accelerated mode explicitly requests GPU despite automatic software fallback
+PASS: both Steam rendering modes explicitly route an existing client to Big Picture
+PASS: native inspection detects Steam in its managed prefix
+PASS: native inspection does not mistake a stopped or unrelated Steam for the managed client
+PASS: native inspection recognizes Wine Windows process names without booting tasklist
+PASS: only fully installed Steam games are imported
+PASS: Steam games route through the client and share its prefix
+PASS: Steam library Windows paths map into the correct prefix
+PASS: Steam library paths cannot traverse outside their drive mapping
+PASS: VDF preserves escaped Windows paths
+PASS: VDF handles quotes and comments
+PASS: malformed VDF is rejected
+PASS: external folder receives an available persistent drive and identity marker
+PASS: external Windows drive resolves to selected folder with Unicode and spaces
+PASS: Steam manifests on external drives import with actual install location
+PASS: disconnected storage is detected without recreating its mount folder
+PASS: different disk at the same mount path is not accepted as connected
+PASS: reconnected storage keeps its original drive mapping
+PASS: external mappings persist across app launches
+PASS: libraries from previous releases remain readable
+PASS: Steam settings are unchanged while client is running
+PASS: external library is registered in Steam
+PASS: Steam mirror receives the same external library
+PASS: existing Steam metadata and installed apps are preserved
+PASS: repeated registration does not duplicate libraries
+PASS: same physical Steam library cannot receive a duplicate drive mapping
+PASS: unregister removes Steam connection and retains game files
+PASS: disconnect removes drive mapping without deleting games
+PASS: a disconnected folder can be linked again
+PASS: malformed mirror prevents partial library updates
+PASS: Apple gamepad profile reads face buttons sticks and triggers
+PASS: gamepad dead zone ignores stick drift
+PASS: stick movement selects the next game
+PASS: held direction repeats only after its delay
+PASS: holding confirm cannot repeatedly launch games
+PASS: background input does not trigger a launch on returning to MacDeck
+PASS: shoulder buttons navigate launcher pages
+PASS: vertical controller navigation remains distinct from horizontal movement
+PASS: DS4 square opens game management without launching
+PASS: grid navigation never wraps across row edges
+PASS: up and down follow visual grid columns
+PASS: partial last rows and empty lists stay in bounds
+PASS: Windows games use Wine builtin XInput
+PASS: button hints distinguish Xbox and PlayStation while using the same actions
+PASS: an experimental launch adjustment affects only its exact game identity
+PASS: direct executables in the shared Steam prefix cannot receive experimental settings
+PASS: renaming a game preserves its compatibility identity
+PASS: Steam App ID resolves the failing HMH record without fuzzy name matching
+PASS: DmC CLR failure and DMC5 renderer regression remain separate and inject no shared experimental environment
+PASS: prepared Elden uses its private runtime and verified Metal3/MSync settings without CLI flags
+PASS: prepared Apple launch never replaces Apple's DXGI with the generic backend
+PASS: Elden trial identity and graphics environment remain separate from other games
+PASS: trial environment rejects a different Steam App ID
+PASS: protected Elden trial detects Apple-native DXGI changes
+PASS: shared renderer map keeps Big Picture on DXMT and scopes overrides by exact Steam App ID
+PASS: internal trial profiles never become common Steam renderer rules
+PASS: DMC5 DXMT rollback preserves Elden/RE3/default and does not match DmC by name
+PASS: DMC5 explicitly selects the GS/TS candidate
+PASS: GS/TS candidate never changes RE3 or DXGI
+PASS: GS/TS candidate rejects a different exact App ID
+PASS: DMC5 renderer rollback preserves the Elden protected revision and baseline
+PASS: DMC5 baseline detects a changed GS/TS candidate
+PASS: DMC5 candidate changes preserve the RE3 runtime baseline
+PASS: DmC direct Metal adjustment defaults to disabled
+PASS: DmC direct Metal map preserves DMC5 GS/TS selection
+PASS: DmC partial Clear experiment defaults to disabled
+PASS: explicit DmC Clear experiment is written to its exact map entry
+PASS: DmC Clear experiment preserves DMC5 renderer
+PASS: DmC Clear map changes are detected while RE3 baseline is preserved
+PASS: DmC Clear experiment rejects RE3 exact ID
+PASS: DmC Clear experiment requires private direct Metal
+PASS: disabling DmC Clear experiment restores original direct Metal map
+PASS: retired DmC D9VK route cannot be enabled again
+PASS: DmC direct Metal adjustment rejects another exact game ID
+PASS: DmC candidate changes are detected without changing RE3 baseline
+PASS: shared renderer configuration never changes an unmarked runtime
+PASS: profile database rejects process injection and arbitrary environment settings
+PASS: a protected game's changed launch settings are blocked before execution
+PASS: protecting one game leaves another game's baseline untouched
+PASS: global graphics preparation never renames game DLLs, edits INI files or replaces game launchers
+PASS: support report JSON carries App ID, stable database key and an explicitly unverified status
+PASS: each launch has isolated process and renderer logs
+PASS: diagnostics include only an allowlist of environment variables
+PASS: diagnostics persist crash signal process ID and end time
+PASS: Steam authentication output and arguments are excluded
+PASS: Steam request exit is not recorded as game completion
+PASS: diagnostic arguments redact password and token values
+PASS: latest game diagnostics can be located after app restart
+PASS: diagnostics summarize GPU error clues without claiming a confirmed cause
+PASS: Steam game diagnostics correlate with the client graphics log session
+PASS: legacy drive-root libraries migrate to an absolute non-root Steam path
+PASS: drive mapping repair preserves actual game folder and identity marker
+PASS: repair replaces stale drive-only paths without duplicating libraries or losing IDs
+PASS: Steam normalized drive-only paths map to the drive root
+PASS: Steam mount failure is shown even when the configuration entry exists
+PASS: Steam recognition requires a successful library scan log
+PASS: configured external libraries automatically reconnect and migrate on app startup
+PASS: Global DX11 Mode switches runtime and prefix system32 dxgi.dll to DXMT
+PASS: Global sync keeps prefix system32 d3d11.dll synchronized with runtime
+PASS: Global sync keeps prefix system32 d3d9.dll synchronized with runtime
+PASS: global preparation preserves existing game-local renderer DLLs
+PASS: global DX11 selection does not rewrite another game configuration
+PASS: Global DX12 Mode switches runtime and prefix system32 dxgi.dll to Wine D3D12 bridge
+PASS: Global DX12 Mode updates game config INI to DirectX12
+PASS: DX12 surfaces GPU device loss instead of forcing resume after timeout
+PASS: DX12 enables MoltenVK Metal argument buffers and prefilled command buffers
+PASS: DX12 does not spoof feature levels or inject unsupported vkd3d-proton flags
+PASS: Global DX12 Mode enables D3D12 and Vulkan overrides in LaunchPlan
+PASS: protected games detect a shared renderer binary change by SHA-256
+PASS: malformed compatibility databases fail closed and preserve their original bytes
+PASS: LaunchPlan pre-seeds user GStreamer registry from bundled cache to eliminate cold start scanning
+PASS: third-party dxgi.dll is never deleted when switching global modes
+PASS: diagnostics identify D3D12 adapter and device creation clues
+PASS: diagnostics distinguish Metal timeout and subsequent device loss
+PASS: RuntimeUpdater compares semantic and engine versions accurately
+PASS: RuntimeUpdater parses MoltenVK release asset and SHA-256 digest
+PASS: RuntimeUpdater parses DXMT builtin release asset
+PASS: RuntimeUpdater selects the newest non-Battle.Net Sikarugir 10.x Wine engine
+PASS: RuntimeUpdater verifies SHA-256 and installs MoltenVK dylib and version record
+PASS: Game Mode patch preserves executable size and bytes outside the plist
+PASS: Game Mode opt-in fits the actual 936-byte Wine plist instead of silently skipping
+PASS: Game Mode patch preserves Wine application class and is idempotent
+169 checks passed

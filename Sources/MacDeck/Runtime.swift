@@ -79,6 +79,9 @@ enum Runtime {
 @MainActor
 final class DeckModel: ObservableObject {
     @Published var library = LibraryData()
+    @Published var gameProfiles: [GameProfile] = []
+    @Published var preparingSupportReport = false
+    private var supportComposer: SupportMailComposer?
     @Published var selected: UUID?
     @Published var page = "steam"
     @Published var search = ""
@@ -89,6 +92,8 @@ final class DeckModel: ObservableObject {
     @Published var testingRuntime = false
     @Published var downloadingSteam = false
     @Published var steamProgress = ""
+    @Published var preparingDependencies = false
+    @Published var dependencyProgress = "Steam 시작 전에 게임별 필수 런타임을 자동 확인합니다."
     @Published var managingStorage = false
     @Published var runtimeComponents: [RuntimeComponentStatus] = []
     @Published var checkingUpdates = false
@@ -122,6 +127,7 @@ final class DeckModel: ObservableObject {
                 try disk.save(library)
             } catch { message = "무료 게임 준비에 실패했습니다: \(error.localizedDescription)" }
         }
+        reloadGameProfiles()
         selected = library.games.first?.id
         runtime = Runtime.inspect(custom: library.winePath)
         DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: library.games, disk: disk)
@@ -149,6 +155,7 @@ final class DeckModel: ObservableObject {
         guard writable else { throw DeckError.message("읽기 오류가 있는 라이브러리는 덮어쓰지 않습니다. 데이터 폴더에서 library.json을 확인해 주세요.") }
         try disk.save(changed)
         library = changed
+        reloadGameProfiles()
     }
 
     func add(_ url: URL) {
@@ -177,7 +184,6 @@ final class DeckModel: ObservableObject {
     func saveGame(_ game: Game) {
         do {
             guard let index = library.games.firstIndex(where: { $0.id == game.id }) else { return }
-            DirectX12Support.applyGlobal(mode: graphicsBackend, wine: runtime.path, games: [game], disk: disk)
             var data = library
             data.games[index] = game
             try commit(data)
@@ -347,11 +353,16 @@ final class DeckModel: ObservableObject {
         launch(game)
     }
 
-    func launch(_ game: Game) {
+    func launch(_ game: Game) { launch(game, dependenciesChecked: false) }
+    func launch(_ game: Game, dependenciesChecked: Bool) {
         let steamCommand = URL(fileURLWithPath: game.path).lastPathComponent.lowercased() == "steam.exe"
+        if steamCommand && !dependenciesChecked && game.trialAppID == nil && disk.prefix(for: game).standardizedFileURL == SteamClient(disk: disk).prefix.standardizedFileURL {
+            prepareGameDependencies(pendingGame: game); return
+        }
         let controllerTest = game.path == SteamClient(disk: disk).prefix.appendingPathComponent("drive_c/windows/system32/control.exe").path && game.arguments == ["joy.cpl"]
         guard !sessions.contains(game.id) || steamCommand else { return }
-        let trackSession = game.steamAppID == nil && !sessions.contains(game.id)
+        let trackSession = (!steamCommand || game.steamAppID == nil) && !sessions.contains(game.id)
+        var selectedWine = runtime.path
         do {
             guard writable else { throw DeckError.message("라이브러리 오류를 해결한 뒤 실행해 주세요.") }
             if let location = game.installedLocation {
@@ -375,8 +386,10 @@ final class DeckModel: ObservableObject {
                 return
             }
             if game.kind == .windows {
-                runtime = Runtime.inspect(custom: library.winePath)
-                guard runtime.ready else {
+                let selectedRuntime = Runtime.inspect(custom: game.runtimePath ?? library.winePath)
+                if game.runtimePath == nil { runtime = selectedRuntime }
+                selectedWine = selectedRuntime.path
+                guard selectedRuntime.ready else {
                     page = "runtime"
                     throw DeckError.message(runtime.path == nil ? "Windows 게임을 실행하려면 macOS용 Wine 런타임을 먼저 연결해 주세요." : "선택한 Wine은 Intel 실행 지원이 필요합니다. 설치 안내를 확인해 주세요.")
                 }
@@ -384,13 +397,16 @@ final class DeckModel: ObservableObject {
                 guard steamCommand || controllerTest || !library.games.contains(where: { $0.id != game.id && sessions.contains($0.id) && $0.kind == .windows && disk.prefix(for: $0) == prefix }) else {
                     throw DeckError.message("같은 Windows 환경에서 실행 중인 항목이 있습니다. 해당 실행이 끝난 뒤 다시 시도해 주세요.")
                 }
-                try disk.preparePrefix(for: game)
-                if let wine = runtime.path { try WineFonts.prepare(prefix: prefix, wine: wine) }
+                if game.trialAppID == nil && !SharedSteamRuntime.isRuntime(selectedWine) {
+                    try disk.preparePrefix(for: game)
+                    if let wine = selectedWine { try WineFonts.prepare(prefix: prefix, wine: wine) }
+                }
             }
-            var plan = try LaunchPlan.make(game: game, wine: runtime.path, disk: disk)
+            var plan = try LaunchPlan.make(game: game, wine: selectedWine, disk: disk)
             let diagnostic = try SessionDiagnostics(game: game, plan: plan, disk: disk,
                 runtimeManifest: Bundle.main.resourceURL?.appendingPathComponent("runtime-manifest.json"))
             plan.environment["DXMT_LOG_PATH"] = diagnostic.renderer.path
+            plan.environment["DXVK_LOG_PATH"] = diagnostic.renderer.path
             if plan.environment["GST_DEBUG"] != nil {
                 plan.environment["GST_DEBUG_FILE"] = diagnostic.renderer.appendingPathComponent("gstreamer.log").path
             }
@@ -459,6 +475,110 @@ final class DeckModel: ObservableObject {
         Task {
             do { try await SessionDiagnostics.export(folder: folder, to: destination); NSWorkspace.shared.activateFileViewerSelecting([destination]) }
             catch { message = error.localizedDescription }
+        }
+    }
+
+    func reloadGameProfiles() {
+        do { gameProfiles = try GameProfileStore(disk: disk).register(library.games).games }
+        catch { message = error.localizedDescription }
+    }
+
+    func gameProfile(_ game: Game) -> GameProfile? {
+        guard var profile = gameProfiles.first(where: { $0.id == GameProfileStore.identity(game) }) else { return nil }
+        if library.sharedSteamRenderer == true, profile.status == .userReportedWorking,
+           let selected = try? SharedSteamRuntime.selection(appID: game.steamAppID, prefix: disk.prefix(for: game)),
+           profile.baseline?.settings["sharedRenderer"] != selected { profile.status = .untested }
+        return profile
+    }
+
+    func setSharedRenderer(_ enabled: Bool) {
+        Task {
+            do {
+                try await SharedSteamRuntime(disk: disk).setEnabled(enabled)
+                library = try disk.load(); runtime = Runtime.inspect(custom: library.winePath)
+                steamProgress = enabled ? "공통 Apple 비교 모드 준비 완료. Steam Big Picture 열기를 선택하세요." : "기존 런타임과 그래픽 DLL을 복구했습니다."
+            } catch { message = error.localizedDescription }
+        }
+    }
+
+    func cycleSteamRenderer(_ game: Game) {
+        Task {
+            do {
+                guard game.steamAppID != nil else { throw DeckError.message("Steam App ID가 있는 게임에서 선택하세요.") }
+                guard !(try await SteamStorage(client: SteamClient(disk: disk)).isRunning(wine: runtime.path ?? "")) else { throw DeckError.message("게임과 Steam을 종료한 뒤 렌더러를 선택하세요.") }
+                let store = GameProfileStore(disk: disk); var profile = try store.profile(game)
+                guard profile.baseline == nil else { throw DeckError.message("정상 실행 기준을 보존하고 있습니다. 먼저 이 게임의 보호를 해제한 뒤 비교하세요.") }
+                switch profile.steamRenderer { case nil: profile.steamRenderer = .metal; case .metal: profile.steamRenderer = .dxmt; case .dxmt: profile.steamRenderer = .vkd3d; case .vkd3d: profile.steamRenderer = nil }
+                try store.update(profile)
+                if library.sharedSteamRenderer == true { try SharedSteamRuntime(disk: disk).writeMap() }
+                reloadGameProfiles()
+            } catch { message = error.localizedDescription }
+        }
+    }
+
+    func markGameWorking(_ game: Game) {
+        do {
+            let store = GameProfileStore(disk: disk)
+            var profile = try store.profile(game)
+            guard !profile.experimentalEnabled else { throw DeckError.message("실험 설정을 끈 뒤 실제 플레이를 확인하고 정상 실행 기준을 저장하세요.") }
+            let plan = try LaunchPlan.make(game: game, wine: runtime.path, disk: disk, verifyProfile: false)
+            profile.experimentalEnabled = false
+            profile.status = .userReportedWorking
+            profile.baseline = try GameProfileStore.baseline(game: game, plan: plan)
+            profile.notes = "사용자가 정상 플레이를 확인하고 실행 기준을 저장했습니다. 자동 테스트 결과가 아닙니다."
+            try store.update(profile); reloadGameProfiles()
+            message = "정상 실행 기준을 저장했습니다. 설정이나 공유 렌더러가 달라지면 실행 전에 알려드립니다. 게임 파일 전체와 모든 macOS 구성요소를 고정하는 기능은 아닙니다."
+        } catch { message = error.localizedDescription }
+    }
+
+    func releaseGameProtection(_ game: Game) {
+        do {
+            let store = GameProfileStore(disk: disk); var profile = try store.profile(game)
+            profile.baseline = nil; profile.experimentalEnabled = false
+            try store.update(profile); reloadGameProfiles()
+        } catch { message = error.localizedDescription }
+    }
+
+    func markGameFailing(_ game: Game) {
+        do {
+            let store = GameProfileStore(disk: disk); var profile = try store.profile(game)
+            profile.status = .failing
+            profile.notes = "사용자가 실행 문제를 보고했습니다. 원인 및 수정은 아직 검증하지 않았습니다."
+            try store.update(profile); reloadGameProfiles()
+        } catch { message = error.localizedDescription }
+    }
+
+    func emailSupportReport(_ game: Game, reproduction: String) {
+        guard !preparingSupportReport else { return }
+        let observed = library.sharedSteamRenderer == true ? try? SessionDiagnostics.observeSharedRenderer(game: game, disk: disk, wine: runtime.path ?? "") : nil
+        guard let session = observed ?? SessionDiagnostics.latest(gameID: game.id, disk: disk) else {
+            message = "이 게임의 실행 기록이 없습니다. 한 번 실행한 뒤 오류 신고를 만들어 주세요."; return
+        }
+        preparingSupportReport = true
+        Task { [self] in
+            defer { preparingSupportReport = false }
+            do {
+                let destination = try await SupportReports.prepare(game: game, session: session, disk: disk, reproduction: reproduction)
+                supportComposer = SupportMailComposer()
+                supportComposer?.compose(game: game, attachment: destination, reproduction: reproduction) { [weak self] error in
+                    self?.message = error
+                    NSWorkspace.shared.activateFileViewerSelecting([destination])
+                }
+            } catch { message = error.localizedDescription }
+        }
+    }
+
+    func inspectCompatibility(_ game: Game) {
+        Task {
+            let report = await Task.detached { CompatibilityInspector.inspect(game: game) }.value
+            do {
+                let folder = disk.logs.appendingPathComponent("Compatibility", isDirectory: true)
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let file = folder.appendingPathComponent(game.id.uuidString + ".json")
+                try encoder.encode(report).write(to: file, options: .atomic)
+                NSWorkspace.shared.open(file)
+            } catch { message = error.localizedDescription }
         }
     }
 
@@ -575,6 +695,10 @@ final class DeckModel: ObservableObject {
     }
 
     func checkRuntimeUpdates(autoInstall: Bool = false) {
+        if library.sharedSteamRenderer == true && autoInstall {
+            updateBannerMessage = "공통 렌더러 비교 중에는 구성요소 자동 교체를 보류합니다. 기존 환경으로 복구한 뒤 업데이트하세요."
+            return
+        }
         guard !checkingUpdates && !updatingComponents else { return }
         reloadRuntimeComponents()
         checkingUpdates = true
@@ -617,6 +741,11 @@ final class DeckModel: ObservableObject {
     }
 
     func updateComponent(_ kind: RuntimeComponentKind) {
+        guard library.sharedSteamRenderer != true else { updateBannerMessage = "공통 렌더러 구성은 비교 중 교체하지 않습니다. 기존 환경으로 복구한 뒤 업데이트하세요."; return }
+        guard !gameProfiles.contains(where: { $0.baseline != nil }) else {
+            updateBannerMessage = "정상 실행 기준으로 보호 중인 게임이 있어 공유 런타임 업데이트를 보류합니다. 별도 런타임에서 검증하거나 호환성 DB에서 보호를 해제한 뒤 진행하세요."
+            return
+        }
         guard !updatingComponents else { return }
         guard let idx = runtimeComponents.firstIndex(where: { $0.kind == kind }),
               let latest = runtimeComponents[idx].latestVersion,
@@ -658,7 +787,7 @@ final class DeckModel: ObservableObject {
                     runtimeComponents[newIdx].statusMessage = "업데이트 완료 (\(latest))"
                 }
                 updateBannerMessage = "\(kind.title)을(를) \(latest) 버전으로 업데이트했습니다."
-                if restartSteam { launchSteam() }
+                if restartSteam { steamProgress = "런타임 업데이트가 끝났습니다. Steam Big Picture 열기를 눌러 다시 실행하세요." }
             } catch {
                 if let newIdx = runtimeComponents.firstIndex(where: { $0.kind == kind }) {
                     runtimeComponents[newIdx].updating = false
@@ -671,6 +800,11 @@ final class DeckModel: ObservableObject {
     }
 
     func updateAllAvailableComponents() {
+        guard library.sharedSteamRenderer != true else { updateBannerMessage = "공통 렌더러 구성은 비교 중 교체하지 않습니다. 기존 환경으로 복구한 뒤 업데이트하세요."; return }
+        guard !gameProfiles.contains(where: { $0.baseline != nil }) else {
+            updateBannerMessage = "정상 실행 기준으로 보호 중인 게임이 있어 공유 런타임 업데이트를 보류합니다. 별도 런타임에서 검증하거나 호환성 DB에서 보호를 해제한 뒤 진행하세요."
+            return
+        }
         guard !updatingComponents else { return }
         let targets = runtimeComponents.filter { $0.updateAvailable && $0.latestVersion != nil && $0.asset != nil }
         guard !targets.isEmpty else { return }
@@ -679,13 +813,12 @@ final class DeckModel: ObservableObject {
         Task {
             defer { updatingComponents = false }
             var updatedNames: [String] = []
-            var restartSteam = false
             do {
                 let currentWine = runtime.path ?? Runtime.inspect(custom: library.winePath).path
                 let service = SteamStorage(client: SteamClient(disk: disk))
                 if steamInstalled, let currentWine, (try? await service.isRunning(wine: currentWine)) == true {
-                    restartSteam = true
-                    try? await service.stopAndWait(wine: currentWine)
+                    updateBannerMessage = "Steam 실행 중에는 자동 업데이트를 보류합니다. Steam 종료 후 업데이트를 눌러 주세요."
+                    return
                 }
                 let ensured = try RuntimeUpdater.ensureWritableRuntime(currentWinePath: currentWine, disk: disk)
                 if let newWinePath = ensured.updatedWinePath, newWinePath != library.winePath {
@@ -725,7 +858,6 @@ final class DeckModel: ObservableObject {
                 }
                 let finalWine = runtime.path ?? Runtime.inspect(custom: library.winePath).path
                 DirectX12Support.applyGlobal(mode: graphicsBackend, wine: finalWine, games: library.games, disk: disk)
-                if restartSteam { launchSteam() }
             } catch {
                 updateBannerMessage = "런타임 업데이트 준비 실패: \(error.localizedDescription)"
                 return
@@ -737,11 +869,11 @@ final class DeckModel: ObservableObject {
     }
 
     func setGraphicsBackend(_ mode: GraphicsBackend) {
+        guard library.sharedSteamRenderer != true else { message = "공통 렌더러 모드에서는 게임 관리의 렌더러 선택을 사용하세요."; return }
         guard graphicsBackend != mode else { return }
         do {
             var data = library
             data.graphicsBackend = mode
-            for index in data.games.indices { data.games[index].graphicsBackend = nil }
             try commit(data)
             let winePath = runtime.path ?? Runtime.inspect(custom: library.winePath).path
             guard steamInstalled, let winePath else {
@@ -766,8 +898,41 @@ final class DeckModel: ObservableObject {
         } catch { message = error.localizedDescription }
     }
 
-    func launchSteam() {
+    func prepareGameDependencies(retry: Bool = false, launchAfter: Bool = false, pendingGame: Game? = nil) {
+        guard !preparingDependencies else { return }
+        guard let wine = runtime.path else { message = "먼저 Wine을 연결하세요."; return }
+        preparingDependencies = true
+        Task {
+            defer { preparingDependencies = false }
+            do {
+                let client = SteamClient(disk: disk)
+                guard sessions.isEmpty, !(try await SteamStorage(client: client).isRunning(wine: wine)) else {
+                    dependencyProgress = "게임/Steam 실행 중: 설치는 다음 Steam 시작 전 진행합니다."
+                    if launchAfter { launchSteam(dependenciesChecked: true) }
+                    if let pendingGame { launch(pendingGame, dependenciesChecked: true) }
+                    return
+                }
+                let games = library.games.filter { $0.steamAppID != nil && $0.trialAppID == nil && disk.prefix(for: $0).standardizedFileURL == client.prefix.standardizedFileURL }
+                let profiles = try GameProfileStore(disk: disk).load().games
+                let needs = try DependencyDiscovery.plan(games: games, profiles: profiles)
+                let installer = DependencyInstaller(disk: disk, prefix: client.prefix, wine: wine)
+                let failures = try await installer.prepare(needs, retry: retry) { [self] text in
+                    await MainActor.run { dependencyProgress = text; steamProgress = text }
+                }
+                try await installer.ensureReadyForSteam()
+                try await installer.activateCLR(for: games, needs: needs)
+                dependencyProgress = failures.isEmpty ? "필수 런타임 확인 완료 · \(needs.count)개 패키지" : failures.joined(separator: "\n")
+                if !failures.isEmpty { message = "일부 필수 런타임 준비 실패. 해당 게임은 아직 실행되지 않을 수 있습니다.\n" + dependencyProgress }
+                if launchAfter { launchSteam(dependenciesChecked: true) }
+                if let pendingGame { launch(pendingGame, dependenciesChecked: true) }
+            } catch { dependencyProgress = error.localizedDescription; message = error.localizedDescription }
+        }
+    }
+
+    func launchSteam() { launchSteam(dependenciesChecked: false) }
+    func launchSteam(dependenciesChecked: Bool) {
         guard steamInstalled else { installSteam(); return }
+        guard dependenciesChecked else { prepareGameDependencies(launchAfter: true); return }
         do {
             reconnectExternalLibraries(steamRunning: sessions.contains(where: { id in library.games.first(where: { $0.id == id })?.steamAppID == nil }))
             var steam = try SteamClient(disk: disk).entry()
@@ -781,7 +946,7 @@ final class DeckModel: ObservableObject {
             try commit(data)
             selected = steam.id
             page = "steam"
-            launch(steam)
+            launch(steam, dependenciesChecked: true)
         } catch { message = error.localizedDescription }
     }
 
@@ -811,15 +976,23 @@ final class DeckModel: ObservableObject {
             reconnectExternalLibraries(steamRunning: true)
             let found = try SteamClient(disk: disk).installedGames()
             var data = library
-            let winePath = runtime.path ?? Runtime.inspect(custom: library.winePath).path
             for var game in found {
                 if let index = data.games.firstIndex(where: { $0.steamAppID == game.steamAppID }) {
-                    game.id = data.games[index].id; game.added = data.games[index].added; game.lastPlayed = data.games[index].lastPlayed
-                    game.graphicsBackend = data.games[index].graphicsBackend
+                    let existing = data.games[index]
+                    game.id = existing.id
+                    game.added = existing.added
+                    game.lastPlayed = existing.lastPlayed
+                    game.graphicsBackend = existing.graphicsBackend
+                    game.d3d9Mode = existing.d3d9Mode
+                    game.prefix = existing.prefix
+                    if !existing.arguments.isEmpty {
+                        game.arguments = existing.arguments
+                    }
                     data.games[index] = game
-                } else { data.games.append(game) }
+                } else {
+                    data.games.append(game)
+                }
             }
-            DirectX12Support.applyGlobal(mode: graphicsBackend, wine: winePath, games: data.games, disk: disk)
             if data.games != library.games { try commit(data) }
             if !silent { steamProgress = "설치된 Steam 게임 \(found.count)개를 확인했습니다. 전체 보유 라이브러리는 Steam에서 볼 수 있습니다." }
         } catch { if !silent { message = error.localizedDescription } }
@@ -844,21 +1017,40 @@ final class DeckModel: ObservableObject {
 
         let winePath = runtime.path ?? Runtime.inspect(custom: library.winePath).path
         if let wine = winePath {
-            SteamStorage(client: SteamClient(disk: disk)).killPrefixProcesses(wine: wine)
-            let server = URL(fileURLWithPath: wine).resolvingSymlinksInPath()
-                .deletingLastPathComponent().appendingPathComponent("wineserver")
-            if FileManager.default.isExecutableFile(atPath: server.path) {
-                let killProc = Process()
-                killProc.executableURL = server
-                killProc.arguments = ["-k"]
-                killProc.standardOutput = FileHandle.nullDevice
-                killProc.standardError = FileHandle.nullDevice
-                try? killProc.run()
-                let deadline = Date().addingTimeInterval(1.0)
-                while killProc.isRunning && Date() < deadline {
-                    usleep(20_000)
+            let storage = SteamStorage(client: SteamClient(disk: disk))
+            storage.killPrefixProcesses(wine: wine)
+            if let entries = try? FileManager.default.contentsOfDirectory(at: disk.bottles, includingPropertiesForKeys: nil) {
+                for bottle in entries where bottle.hasDirectoryPath {
+                    storage.killPrefix(bottle, wine: wine)
                 }
-                if killProc.isRunning { killProc.terminate() }
+            }
+        }
+        sweepOrphanedWineProcesses()
+    }
+
+    func sweepOrphanedWineProcesses() {
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-axo", "pid,command"]
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        let output = String(decoding: data, as: UTF8.self)
+        let myPID = ProcessInfo.processInfo.processIdentifier
+        let targets = ["winedevice.exe", "wineserver", "wine-preloader", "wine64-preloader", "explorer.exe", "services.exe", "steamwebhelper.exe", "steam.exe"]
+        for line in output.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard let firstSpace = trimmed.firstIndex(of: " ") else { continue }
+            let pidString = String(trimmed[..<firstSpace])
+            let command = String(trimmed[firstSpace...]).trimmingCharacters(in: .whitespaces)
+            guard let pid = pid_t(pidString), pid != myPID, pid > 1 else { continue }
+            let matchesTarget = targets.contains { command.contains($0) }
+            let matchesMacDeck = command.contains("MacDeck") || command.contains("Bottles") || command.contains("mac-runtime") || command.contains("steamapps")
+            if matchesTarget && matchesMacDeck {
+                kill(pid, SIGTERM)
             }
         }
     }

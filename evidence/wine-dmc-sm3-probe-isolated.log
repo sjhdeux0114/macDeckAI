@@ -1,0 +1,18 @@
+info:  Failed to set Metal cache path, fallback to system default
+Adapter: Apple M5
+PASS DXT5 static/dynamic texture creation and upload
+SM3 FP16 center=3400,3800,3a00,3c00
+PASS programmable SM3 triangle to FP16 render target
+QUERY type=8 flags=0 hr=00000000 elapsed_ms=1 result=1
+QUERY type=8 flags=1 hr=00000000 elapsed_ms=1 result=1
+QUERY type=9 flags=0 hr=00000000 elapsed_ms=2 result=0
+QUERY type=9 flags=1 hr=00000000 elapsed_ms=1 result=0
+PASS D3D9 GPU clear/readback, full and partial rectangle Present, 1280x720 client
+2026-10-19 12:15:52.554 wine[24328:15271905] [libMTLHud] Metric com.apple.hud-stat.frame-interval already exist
+2026-10-19 12:15:52.554 wine[24328:15271905] [libMTLHud] Metric com.apple.hud-stat.present-delay already exist
+2026-10-19 12:15:52.554 wine[24328:15271905] [libMTLHud] Metric com.apple.hud-stat.fps already exist
+2026-10-19 12:15:52.554 wine[24328:15271880] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fac3b963360 Enable HUD, ke='Command-F9', action: toggleEnabled:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 12:15:52.554 wine[24328:15271880] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fac3b93c8d0 Enable Logging, ke='Command-F8', action: toggleLoggingEnabled:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 12:15:52.554 wine[24328:15271880] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fac3b968da0 Reset Metrics, ke='Command-F11', action: resetMetrics:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 12:15:52.554 wine[24328:15271880] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fac3b960550 Show Configuration Panel, ke='Command-F12', action: showConfigurationPanel:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 12:15:52.554 wine[24328:15271880] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fac3b945f30 Copy HUD Configuration, action: copyConfig:>, but is only supported for system-provided menu items; will not be used

@@ -45,6 +45,30 @@ final class SessionDiagnostics {
             return value
         }
     }
+
+    static func observeSharedRenderer(game: Game, disk: LibraryDisk, wine: String) throws -> URL? {
+        guard let id = game.steamAppID, !id.isEmpty, id.allSatisfy({ $0.isNumber }) else { return nil }
+        let root = SteamClient(disk: disk).prefix.appendingPathComponent("drive_c/ProgramData/MacDeck/RendererSessions")
+        guard (try? root.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true else { return nil }
+        let files = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.contentModificationDateKey, .isSymbolicLinkKey, .fileSizeKey])) ?? []
+        let candidates = files.filter { $0.lastPathComponent.hasPrefix(id + "-") && $0.pathExtension == "log" }
+            .sorted { ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) > ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
+        guard let source = candidates.first,
+              let values = try? source.resourceValues(forKeys: [.isSymbolicLinkKey, .fileSizeKey]), values.isSymbolicLink != true,
+              let size = values.fileSize, size <= 65536 else { return nil }
+        let bytes = try Data(contentsOf: source)
+        guard let text = String(data: bytes, encoding: .utf8), !text.isEmpty,
+              text.split(whereSeparator: \.isNewline).allSatisfy({ $0.hasPrefix("appid=" + id + " ") }) else { return nil }
+        let prefix = SteamClient(disk: disk).prefix.path
+        let plan = LaunchPlan(executable: URL(fileURLWithPath: wine), arguments: [], environment: ["WINEPREFIX": prefix, "D3DM_MTL4": "0"], workingDirectory: URL(fileURLWithPath: game.installedLocation ?? prefix))
+        let diagnostic = try SessionDiagnostics(game: game, plan: plan, disk: disk)
+        diagnostic.record.kind = "renderer-observed"
+        diagnostic.record.status = "renderer-loaded"
+        diagnostic.record.notes = ["Observed only the shared renderer's numeric Steam App ID log. This is not proof of successful gameplay or the game's exit state. Steam account files and process output were not collected."]
+        try bytes.write(to: diagnostic.renderer.appendingPathComponent(source.lastPathComponent))
+        try diagnostic.save()
+        return diagnostic.folder
+    }
     init(game: Game, plan: LaunchPlan, disk: LibraryDisk, runtimeManifest: URL? = nil) throws {
         let id = UUID(), started = Date()
         let stamp = ISO8601DateFormatter().string(from: started).replacingOccurrences(of: ":", with: "-")
@@ -52,25 +76,34 @@ final class SessionDiagnostics {
         output = folder.appendingPathComponent("process.log")
         renderer = folder.appendingPathComponent("Renderer", isDirectory: true)
         let steam = URL(fileURLWithPath: game.path).lastPathComponent.lowercased() == "steam.exe"
-        let kind = game.steamAppID != nil ? "steam-launch-request" : steam ? "steam-client" : "direct-process"
+        let kind = steam ? (game.steamAppID != nil ? "steam-launch-request" : "steam-client") : "direct-process"
         record = SessionRecord(sessionID: id, gameID: game.id, game: game.name, steamAppID: game.steamAppID,
             kind: kind, started: started, appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development",
             gpu: MTLCreateSystemDefaultDevice()?.name, operatingSystem: ProcessInfo.processInfo.operatingSystemVersionString, wine: game.kind == .windows ? plan.executable.path : nil,
             executable: game.path, arguments: steam ? [] : Self.safeArguments(game.arguments), workingDirectory: plan.workingDirectory.path,
             environment: plan.environment.filter { [
-                "WINEPREFIX", "WINEDLLOVERRIDES", "WINEDEBUG", "DXMT_LOG_LEVEL", "MTL_HUD_ENABLED", "SDL_RENDER_DRIVER",
+                "WINE_D3D_CONFIG", "WINEPREFIX", "WINEDLLOVERRIDES", "WINEDEBUG", "DXMT_LOG_LEVEL", "DXVK_LOG_LEVEL", "MTL_HUD_ENABLED", "SDL_RENDER_DRIVER",
                 "MVK_CONFIG_RESUME_LOST_DEVICE", "WINEMSYNC", "WINEESYNC", "WINEMSYNC_QLIMIT", "WINE_LARGE_ADDRESS_AWARE",
                 "DXMT_CONFIG", "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS",
-                "VKD3D_FEATURE_LEVEL", "VKD3D_CONFIG"
+                "VKD3D_FEATURE_LEVEL", "VKD3D_CONFIG", "D3DM_MTL4"
             ].contains($0.key) },
             status: "prepared", notes: [])
         if game.steamAppID != nil {
             record.relatedSteamSessionID = Self.entries(disk: disk).first { $0.record.kind == "steam-client" && $0.record.environment["WINEPREFIX"] == plan.environment["WINEPREFIX"] }?.record.sessionID
         }
         if steam { record.notes.append("Steam stdout, raw stderr and launch arguments are excluded. A separate filter retains only allowlisted Vulkan/MoltenVK graphics errors to protect authentication data.") }
-        if game.steamAppID != nil { record.notes.append("This process sends a Steam launch request. Its exit code is not the game's exit code. Graphics logs belong to the running Steam client session.") }
+        if kind == "steam-launch-request" { record.notes.append("This process sends a Steam launch request. Its exit code is not the game's exit code. Graphics logs belong to the running Steam client session.") }
         record.notes.append("Last recorded process state only; application termination can prevent the final status update.")
         try FileManager.default.createDirectory(at: renderer, withIntermediateDirectories: true)
+        let profileStore = GameProfileStore(disk: disk)
+        let profileEncoder = JSONEncoder(); profileEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try profileEncoder.encode(profileStore.profile(game)).write(to: folder.appendingPathComponent("game-profile.json"), options: .atomic)
+        let compatibility = CompatibilityInspector.inspect(game: game)
+        let compatibilityEncoder = JSONEncoder()
+        compatibilityEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        if let bytes = try? compatibilityEncoder.encode(compatibility) {
+            try? bytes.write(to: folder.appendingPathComponent("compatibility.json"), options: .atomic)
+        }
         try Data("MacDeck session \(id.uuidString)\n\(steam ? "Steam process output excluded.\n" : "")".utf8).write(to: output)
         if let runtimeManifest, FileManager.default.fileExists(atPath: runtimeManifest.path) {
             try FileManager.default.copyItem(at: runtimeManifest, to: folder.appendingPathComponent("runtime-manifest.json"))

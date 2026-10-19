@@ -1,0 +1,18 @@
+--- a/src/util/config/config.cpp
++++ b/src/util/config/config.cpp
+@@ -1,3 +1,4 @@
++#include <algorithm>
+ #include <array>
+ #include <fstream>
+ #include <sstream>
+--- a/src/d3d9/d3d9_include.h
++++ b/src/d3d9/d3d9_include.h
+@@ -50,7 +50,7 @@
+ #endif
+ 
+ // MinGW headers are broken. Who'dve guessed?
+-#ifndef _MSC_VER
++#if !defined(_MSC_VER) && !defined(DXVK_HAVE_D3DDEVINFO_RESOURCEMANAGER)
+ typedef struct _D3DDEVINFO_RESOURCEMANAGER
+ {
+   char dummy;
