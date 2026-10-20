@@ -92,6 +92,8 @@ final class DeckModel: ObservableObject {
     @Published var testingRuntime = false
     @Published var downloadingSteam = false
     @Published var steamProgress = ""
+    @Published var downloadingEpic = false
+    @Published var epicProgress = ""
     @Published var preparingDependencies = false
     @Published var dependencyProgress = "Steam 시작 전에 게임별 필수 런타임을 자동 확인합니다."
     @Published var managingStorage = false
@@ -140,7 +142,10 @@ final class DeckModel: ObservableObject {
                     self.sessions.remove(id)
                 }
                 self.refreshTick += 1
-                if self.refreshTick % 5 == 0 { self.refreshSteamGames(silent: true) }
+                if self.refreshTick % 5 == 0 {
+                    self.refreshSteamGames(silent: true)
+                    self.refreshEpicGames(silent: true)
+                }
             }
         }
     }
@@ -264,11 +269,12 @@ final class DeckModel: ObservableObject {
         guard picker.runModal() == .OK, let folder = picker.url else { return }
         do {
             var data = library
-            let entry = try ExternalLibrary.connect(folder: folder, existing: data.externalLibraries ?? [], prefix: SteamClient(disk: disk).prefix)
+            let entry = try ExternalLibrary.connect(folder: folder, existing: data.externalLibraries ?? [], prefix: SteamClient(disk: disk).prefix, additionalPrefixes: [EpicClient(disk: disk).prefix])
             data.externalLibraries = (data.externalLibraries ?? []) + [entry]
             do { try commit(data) }
             catch {
                 try? FileManager.default.removeItem(at: SteamClient(disk: disk).prefix.appendingPathComponent("dosdevices/" + entry.drive + ":"))
+                entry.unlinkFrom(prefix: EpicClient(disk: disk).prefix)
                 try? FileManager.default.removeItem(at: entry.marker)
                 throw error
             }
@@ -355,6 +361,10 @@ final class DeckModel: ObservableObject {
 
     func launch(_ game: Game) { launch(game, dependenciesChecked: false) }
     func launch(_ game: Game, dependenciesChecked: Bool) {
+        if !dependenciesChecked && EpicClient(disk: disk).requiresDependencies(game) {
+            prepareEpicDependencies(pendingGame: game)
+            return
+        }
         let steamCommand = URL(fileURLWithPath: game.path).lastPathComponent.lowercased() == "steam.exe"
         if steamCommand && !dependenciesChecked && game.trialAppID == nil && disk.prefix(for: game).standardizedFileURL == SteamClient(disk: disk).prefix.standardizedFileURL {
             prepareGameDependencies(pendingGame: game); return
@@ -631,6 +641,188 @@ final class DeckModel: ObservableObject {
 
     var steamInstalled: Bool { SteamClient(disk: disk).executable != nil }
     var steamGameCount: Int { library.games.filter { $0.steamAppID != nil }.count }
+    var epicInstalled: Bool { EpicClient(disk: disk).executable != nil }
+    var epicGameCount: Int { library.games.filter { $0.epicAppID != nil }.count }
+    var epicEOSInstalled: Bool { EpicClient(disk: disk).eosInstalled }
+
+    func installEpicOnlineServices() {
+        let epic = EpicClient(disk: disk)
+        guard let wine = runtime.path, let installer = epic.eosInstaller else {
+            message = "Epic Games Launcher 설치 후 시도해 주세요."
+            return
+        }
+        epicProgress = "Epic Online Services를 설치하고 있습니다..."
+        Task {
+            do {
+                try epic.prepareEOSDirectories()
+                let log = disk.logs.appendingPathComponent("eos-installer.log")
+                try await EpicClient.runEOSInstaller(wine: wine, installer: installer, prefix: epic.prefix, log: log)
+                if epic.eosInstalled {
+                    epicProgress = "Epic Online Services가 성공적으로 설치되었습니다."
+                } else {
+                    epicProgress = "Epic Online Services 설치를 완료하지 못했습니다."
+                }
+            } catch {
+                epicProgress = "Epic Online Services 설치 오류: \(error.localizedDescription)"
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    func prepareEpicPrefix() {
+        let epic = EpicClient(disk: disk)
+        let prefix = epic.prefix
+        if let wine = runtime.path {
+            try? WineFonts.prepare(prefix: prefix, wine: wine)
+        }
+        for storage in library.externalLibraries ?? [] {
+            try? storage.syncTo(prefix: prefix)
+        }
+        let mode = library.graphicsBackend ?? .dxmt
+        let root = runtime.path.map { URL(fileURLWithPath: $0).deletingLastPathComponent().deletingLastPathComponent() }
+        if !EpicRendererSupport(disk: disk).managed { DirectX12Support.syncPrefix(prefix, mode: mode, runtimeRoot: root) }
+        epic.applyDirectoryPreparationPatch()
+    }
+
+    func launchEpic() {
+        guard epicInstalled else { downloadEpic(); return }
+        prepareEpicDependencies()
+    }
+
+    func prepareEpicRuntimes() {
+        guard epicInstalled else { message = "Epic Games Launcher 설치 후 다시 시도해 주세요."; return }
+        prepareEpicDependencies(retry: true, launchAfter: false)
+    }
+
+    private func prepareEpicDependencies(pendingGame: Game? = nil, retry: Bool = false, launchAfter: Bool = true) {
+        guard !preparingDependencies else { return }
+        guard let wine = runtime.path else { message = "먼저 Wine을 연결하세요."; return }
+        preparingDependencies = true
+        Task {
+            defer { preparingDependencies = false }
+            do {
+                let epic = EpicClient(disk: disk)
+                let games = try epic.installedGames()
+                let needs = try DependencyDiscovery.epicPlan(games: games, profiles: GameProfileStore(disk: disk).load().games)
+                let installer = DependencyInstaller(disk: disk, prefix: epic.prefix, wine: wine)
+                var missing: [DependencyNeed] = []
+                for need in needs {
+                    if let package = DependencyCatalog.package(need.packageID), try await !installer.isInstalled(package) { missing.append(need) }
+                }
+                let failures = try await installer.prepare(missing, retry: retry) { [self] text in
+                    await MainActor.run { dependencyProgress = text; epicProgress = text }
+                }
+                guard failures.isEmpty else { throw DeckError.message(failures.joined(separator: "\n")) }
+                try await installer.ensureReadyForSteam()
+                let clrPolicy = epic.prefix.appendingPathComponent("drive_c/ProgramData/MacDeck/clr-policy.json")
+                if needs.contains(where: { DependencyCatalog.package($0.packageID)?.isCLR == true }),
+                   !missing.isEmpty || !FileManager.default.fileExists(atPath: clrPolicy.path) {
+                    try await installer.assertIdlePrefix()
+                    try await installer.activateCLR(for: games, needs: needs)
+                }
+                epicProgress = "Epic 필수 런타임 준비 완료 · VC++ 12종 및 게임별 요구 패키지"
+                guard launchAfter else { return }
+                if let pendingGame { launch(pendingGame, dependenciesChecked: true) }
+                else { launchEpicPrepared() }
+            } catch {
+                epicProgress = "Epic 필수 런타임 준비를 완료하지 못했습니다."
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    private func launchEpicPrepared() {
+        guard epicInstalled else { downloadEpic(); return }
+        prepareEpicPrefix()
+        do {
+            let epic = try EpicClient(disk: disk).entry()
+            var data = library
+            if let index = data.games.firstIndex(where: { $0.name == "Epic Games Launcher" || $0.path == epic.path }) {
+                data.games[index] = epic
+            } else {
+                data.games.insert(epic, at: 0)
+            }
+            try commit(data)
+            selected = epic.id
+            launch(epic)
+            refreshEpicGames(silent: true)
+        } catch { message = error.localizedDescription }
+    }
+
+    func downloadEpic() {
+        if EpicClient(disk: disk).executable != nil { launchEpic(); return }
+        runtime = Runtime.inspect(custom: library.winePath)
+        guard runtime.ready else { page = "runtime"; message = "Epic Games Launcher 설치 전에 Wine 런타임을 연결해 주세요."; return }
+        downloadingEpic = true
+        epicProgress = "Epic Games 공식 설치 프로그램을 다운로드하고 있습니다."
+        Task {
+            defer { downloadingEpic = false }
+            do {
+                let folder = disk.root.appendingPathComponent("Installers", isDirectory: true)
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                let destination = folder.appendingPathComponent("EpicGamesLauncherInstaller.msi")
+                if !FileManager.default.fileExists(atPath: destination.path) {
+                    let source = URL(string: "https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncherInstaller.msi")!
+                    let (temporary, response) = try await URLSession.shared.download(from: source)
+                    guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw DeckError.message("Epic Games Launcher 설치 프로그램 다운로드에 실패했습니다.") }
+                    let bytes = try Data(contentsOf: temporary)
+                    try bytes.write(to: destination, options: .atomic)
+                }
+                prepareEpicPrefix()
+                var installer = Game(name: "Epic Games 설치", path: destination.path, kind: .windows)
+                installer.arguments = ["/qn"]
+                installer.prefix = EpicClient(disk: disk).prefix.path
+                try disk.preparePrefix(for: installer)
+                let plan = try LaunchPlan.make(game: installer, wine: runtime.path, disk: disk)
+                epicProgress = "Epic Games 전용 Windows 환경을 구성하고 있습니다."
+                try await EpicClient.runInstaller(plan, log: disk.logs.appendingPathComponent("epic-installer.log"))
+                let deadline = Date().addingTimeInterval(180)
+                while EpicClient(disk: disk).executable == nil && Date() < deadline {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+                guard EpicClient(disk: disk).executable != nil else {
+                    let log = disk.logs.appendingPathComponent("epic-installer.log")
+                    let tail = (try? String(contentsOf: log))?.suffix(500) ?? ""
+                    throw DeckError.message("설치 후 Epic Games Launcher 실행 파일을 찾지 못했습니다.\n\(tail)")
+                }
+                let epic = EpicClient(disk: disk)
+                if let eos = epic.eosInstaller, !epic.eosInstalled, let wine = runtime.path {
+                    epicProgress = "Epic Online Services를 구성하고 있습니다."
+                    try? epic.prepareEOSDirectories()
+                    try? await EpicClient.runEOSInstaller(wine: wine, installer: eos, prefix: epic.prefix, log: disk.logs.appendingPathComponent("eos-installer.log"))
+                }
+                epicProgress = "Epic Games Launcher를 실행하고 있습니다."
+                launchEpic()
+            } catch { epicProgress = "Epic Games 준비를 완료하지 못했습니다."; message = error.localizedDescription }
+        }
+    }
+
+    func refreshEpicGames(silent: Bool = false) {
+        guard writable, epicInstalled else { return }
+        do {
+            reconnectExternalLibraries(steamRunning: true)
+            let found = try EpicClient(disk: disk).installedGames()
+            var data = library
+            for var game in found {
+                if let index = data.games.firstIndex(where: { $0.epicAppID == game.epicAppID }) {
+                    let existing = data.games[index]
+                    game.id = existing.id
+                    game.added = existing.added
+                    game.lastPlayed = existing.lastPlayed
+                    game.graphicsBackend = existing.graphicsBackend
+                    game.prefix = existing.prefix
+                    if !existing.arguments.isEmpty {
+                        game.arguments = existing.arguments
+                    }
+                    data.games[index] = game
+                } else {
+                    data.games.append(game)
+                }
+            }
+            if data.games != library.games { try commit(data) }
+            if !silent { epicProgress = "설치된 Epic Games 게임 \(found.count)개를 확인했습니다." }
+        } catch { if !silent { message = error.localizedDescription } }
+    }
 
     func reconnectExternalLibraries(steamRunning: Bool = false) {
         guard writable, let existing = library.externalLibraries, !existing.isEmpty else { return }
@@ -651,6 +843,7 @@ final class DeckModel: ObservableObject {
         reloadRuntimeComponents()
         reconnectExternalLibraries(steamRunning: false)
         refreshSteamGames(silent: true)
+        refreshEpicGames(silent: true)
         let willStartSteam = CommandLine.arguments.contains("--setup-steam")
             || CommandLine.arguments.contains("--steam")
             || (steamInstalled && (library.startSteamOnLaunch ?? true))
@@ -983,7 +1176,6 @@ final class DeckModel: ObservableObject {
                     game.added = existing.added
                     game.lastPlayed = existing.lastPlayed
                     game.graphicsBackend = existing.graphicsBackend
-                    game.d3d9Mode = existing.d3d9Mode
                     game.prefix = existing.prefix
                     if !existing.arguments.isEmpty {
                         game.arguments = existing.arguments

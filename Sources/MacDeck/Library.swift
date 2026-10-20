@@ -39,20 +39,6 @@ enum GraphicsBackend: String, Codable, CaseIterable {
     }
 }
 
-enum D3D9Mode: String, Codable, CaseIterable {
-    case automatic = "auto"
-    case builtin = "builtin"
-    case native = "native"
-
-    var label: String {
-        switch self {
-        case .automatic: return "자동 (게임 폴더 d3d9.dll 우선 감지)"
-        case .builtin: return "WineD3D (기본 내장 렌더러)"
-        case .native: return "Native D9VK (Vulkan → Metal 하드웨어 가속)"
-        }
-    }
-}
-
 struct Game: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String
@@ -63,9 +49,9 @@ struct Game: Codable, Identifiable, Equatable {
     var lastPlayed: Date? = nil
     var added: Date = Date()
     var steamAppID: String? = nil
+    var epicAppID: String? = nil
     var installedLocation: String? = nil
     var graphicsBackend: GraphicsBackend? = nil
-    var d3d9Mode: D3D9Mode? = nil
     var runtimePath: String? = nil
     var trialAppID: String? = nil
 
@@ -164,6 +150,7 @@ enum DirectX12Support {
     }
 
     static func syncPrefix(_ prefix: URL, mode: GraphicsBackend, runtimeRoot: URL?) {
+        if FileManager.default.fileExists(atPath: prefix.appendingPathComponent("drive_c/ProgramData/MacDeck/epic-renderers.json").path) { return }
         if let root = runtimeRoot, SharedSteamRuntime.isRuntime(root.appendingPathComponent("bin/wine").path) { return }
         let sysReg = prefix.appendingPathComponent("system.reg")
         if let regText = try? String(contentsOf: sysReg, encoding: .utf8) {
@@ -252,15 +239,9 @@ enum DirectX12Support {
         return mode
     }
 
-    static func dllOverrides(for mode: GraphicsBackend, d3d9Mode: D3D9Mode = .builtin) -> String {
-        let d3d9Override: String
-        switch d3d9Mode {
-        case .native:
-            d3d9Override = "d3d9=n,b;d3dx9_24,d3dx9_25,d3dx9_26,d3dx9_27,d3dx9_28,d3dx9_29,d3dx9_30,d3dx9_31,d3dx9_32,d3dx9_33,d3dx9_34,d3dx9_35,d3dx9_36,d3dx9_37,d3dx9_38,d3dx9_39,d3dx9_40,d3dx9_41,d3dx9_42,d3dx9_43=b;"
-        case .builtin, .automatic:
-            d3d9Override = "d3d9=b;"
-        }
-        let common = "winemenubuilder.exe=d;winedbg.exe=d;mscoree,mshtml=;gameoverlayrenderer,gameoverlayrenderer64=d;"
+    static func dllOverrides(for mode: GraphicsBackend) -> String {
+        let d3d9Override = "d3d9=b;"
+        let common = "winemenubuilder.exe=d;winedbg.exe=d;mshtml=;gameoverlayrenderer,gameoverlayrenderer64=d;"
             + "xinput1_1,xinput1_2,xinput1_3,xinput1_4,xinput9_1_0=b;"
             + "xaudio2_0,xaudio2_1,xaudio2_2,xaudio2_3,xaudio2_4,xaudio2_5,xaudio2_6,xaudio2_7,xaudio2_8,xaudio2_9,x3daudio1_0,x3daudio1_1,x3daudio1_2,x3daudio1_3,x3daudio1_4,x3daudio1_5,x3daudio1_6,x3daudio1_7=b;dsound=b;"
             + "mfplat,mfreadwrite,mf,mfmediaengine,winegstreamer=b;quartz,amstream=b;"
@@ -362,7 +343,11 @@ struct LaunchPlan {
             let appleTrial = game.trialAppID == "1245620" && (try? GameTrial.load(id: "1245620", disk: disk)?.backend) == "Apple-D3DMetal"
             if !appleTrial { DirectX12Support.applyGlobal(mode: mode, wine: wine, games: [game], disk: disk) }
             executable = URL(fileURLWithPath: wine)
-            arguments.insert(game.path, at: 0)
+            if game.path.lowercased().hasSuffix(".msi") {
+                arguments = ["msiexec", "/i", game.path] + game.arguments
+            } else {
+                arguments.insert(game.path, at: 0)
+            }
             environment["WINEPREFIX"] = disk.prefix(for: game).path
             if let id = game.steamAppID, URL(fileURLWithPath: game.path).lastPathComponent.lowercased() != "steam.exe" {
                 environment["SteamAppId"] = id; environment["SteamGameId"] = id
@@ -373,8 +358,7 @@ struct LaunchPlan {
                 environment["GST_DEBUG"] = "2"
                 environment["GST_DEBUG_NO_COLOR"] = "1"
             }
-            let effectiveD3D9: D3D9Mode = game.d3d9Mode ?? .automatic
-            environment["WINEDLLOVERRIDES"] = DirectX12Support.dllOverrides(for: mode, d3d9Mode: effectiveD3D9)
+            environment["WINEDLLOVERRIDES"] = DirectX12Support.dllOverrides(for: mode)
             environment["DYLD_FALLBACK_LIBRARY_PATH"] = URL(fileURLWithPath: wine).resolvingSymlinksInPath()
                 .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib").path
             let media = URL(fileURLWithPath: wine).resolvingSymlinksInPath()
@@ -432,27 +416,7 @@ struct LaunchPlan {
             environment["DXVK_LOG_LEVEL"] = environment["DXVK_LOG_LEVEL"] ?? "info"
             // DO_NOT_WAIT workarounds are game-specific; preserve normal map semantics.
             environment["DXMT_CONFIG"] = environment["DXMT_CONFIG"] ?? "dxgi.handleAltTab=True"
-            if effectiveD3D9 == .native {
-                // When native D9VK is active, write managed dxvk.conf with 2GB VRAM cap to avoid 32-bit integer overflow
-                try? FileManager.default.createDirectory(at: disk.logs, withIntermediateDirectories: true)
-                let dxvkConf = disk.logs.appendingPathComponent("dxvk-" + game.id.uuidString + ".conf")
-                let conf = """
-                d3d9.maxFrameRate = 60
-                d3d9.presentInterval = 1
-                d3d9.tearFree = False
-                d3d9.deferSurfaceCreation = False
-                d3d9.maxAvailableMemory = 2048
-                d3d9.samplerAnisotropy = 1
-                d3d9.customVendorId = 10de
-                d3d9.customDeviceId = 1200
-                d3d9.dpiAware = True
-                """
-                try? conf.write(to: dxvkConf, atomically: true, encoding: .utf8)
-                environment["DXVK_CONFIG_FILE"] = dxvkConf.path
-                environment["DXVK_STATE_CACHE_PATH"] = disk.logs.path
-            } else {
-                environment["WINE_D3D_CONFIG"] = "renderer=vulkan"
-            }
+            environment["WINE_D3D_CONFIG"] = "renderer=vulkan"
             let hudEnabled = loaded?.showMetalHUD ?? true
             environment["MTL_HUD_ENABLED"] = hudEnabled ? "1" : "0"
             environment["SDL_RENDER_DRIVER"] = "direct3d11"
@@ -474,6 +438,7 @@ struct LaunchPlan {
         }
         try GameTrial.configure(game: game, disk: disk, environment: &environment)
         try SharedSteamRuntime.configure(wine: wine ?? "", environment: &environment)
+        try EpicRendererSupport(disk: disk).configure(wine: wine ?? "", environment: &environment)
         if let prefix = environment["WINEPREFIX"] { try DependencyInstaller.applyCLRPolicy(prefix: URL(fileURLWithPath: prefix), environment: &environment) }
         let profiles = GameProfileStore(disk: disk)
         try profiles.apply(game, environment: &environment)

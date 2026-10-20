@@ -31,7 +31,33 @@ struct ExternalLibrary: Codable, Identifiable, Equatable {
         return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file) + " 사용 가능"
     }
 
-    static func connect(folder: URL, existing: [ExternalLibrary], prefix: URL) throws -> ExternalLibrary {
+    func syncTo(prefix: URL) throws {
+        let fm = FileManager.default
+        let devices = prefix.appendingPathComponent("dosdevices")
+        try fm.createDirectory(at: devices, withIntermediateDirectories: true)
+        if !fm.fileExists(atPath: prefix.appendingPathComponent("system.reg").path) {
+            try fm.createDirectory(at: prefix.appendingPathComponent("drive_c"), withIntermediateDirectories: true)
+            for (letter, target) in [("c:", "../drive_c"), ("z:", "/")] {
+                let link = devices.appendingPathComponent(letter)
+                if (try? fm.attributesOfItem(atPath: link.path)) == nil {
+                    try? fm.createSymbolicLink(atPath: link.path, withDestinationPath: target)
+                }
+            }
+        }
+        let link = devices.appendingPathComponent(drive + ":")
+        if let target = try? fm.destinationOfSymbolicLink(atPath: link.path) {
+            if URL(fileURLWithPath: target).standardizedFileURL.path == mappingRoot.path { return }
+            try? fm.removeItem(at: link)
+        }
+        try fm.createSymbolicLink(at: link, withDestinationURL: mappingRoot)
+    }
+
+    func unlinkFrom(prefix: URL) {
+        let link = prefix.appendingPathComponent("dosdevices/" + drive + ":")
+        try? FileManager.default.removeItem(at: link)
+    }
+
+    static func connect(folder: URL, existing: [ExternalLibrary], prefix: URL, additionalPrefixes: [URL] = []) throws -> ExternalLibrary {
         let folder = folder.resolvingSymlinksInPath().standardizedFileURL
         var directory: ObjCBool = false
         let fm = FileManager.default
@@ -54,7 +80,12 @@ struct ExternalLibrary: Codable, Identifiable, Equatable {
         let entry = ExternalLibrary(path: folder.path, drive: drive, libraryFolder: fm.fileExists(atPath: folder.appendingPathComponent("steamapps").path) ? "" : "SteamLibrary").nonRootMapping
         guard !existing.contains(where: { $0.installRoot.resolvingSymlinksInPath().standardizedFileURL == entry.installRoot.resolvingSymlinksInPath().standardizedFileURL }) else { throw DeckError.message("이미 연결된 게임 설치 폴더입니다. 기존 드라이브 항목을 사용해 주세요.") }
         try Data(entry.id.uuidString.utf8).write(to: entry.marker, options: .withoutOverwriting)
-        do { try fm.createSymbolicLink(at: devices.appendingPathComponent(drive + ":"), withDestinationURL: entry.mappingRoot) }
+        do {
+            try fm.createSymbolicLink(at: devices.appendingPathComponent(drive + ":"), withDestinationURL: entry.mappingRoot)
+            for other in additionalPrefixes {
+                try? entry.syncTo(prefix: other)
+            }
+        }
         catch { try? fm.removeItem(at: entry.marker); throw error }
         return entry
     }

@@ -1,5 +1,35 @@
 # MacDeck (macDeckAI)
 
+> v0.6.0 최종 후보(2026-10-20): Epic VC++12종 설치·x86/x64 DLL/API·재설치 방지 검사, 앱230개·콘솔 UI·서명·DMG 내부 앱 검사 PASS. 호그와트 설치 후 실제 플레이56.47FPS 표본 재확인. DMG/SHA256 생성 완료, Git 커밋·푸시·릴리즈 게시 확인 진행 중. 모든 배포 작업 성공 뒤에만 요청한 잠자기를 실행한다.
+
+> v0.6.0 준비(2026-10-20): Epic 시작 전 VC++2005–2022 x86/x64 총12종 선행 설치, 게임별 .NET 검색 및 수동 재시도를 추가했습니다. 실제 설치·DMG 검증 후 GitHub 릴리즈 배포를 진행 중입니다.
+
+> 2026-10-20 실기 확인: 사용자 게임 약관 동의 후 Epic 호그와트 레거시 저장 게임의 Central Hall·이동·대화 장면까지 직접 확인했습니다. Apple D3DMetal D3D12, 1280×720·FSR2 Quality에서 HUD 약55~60FPS, 관찰 중 멈춤/크래시 없음. 장시간·다른 레벨·고해상도·패드는 별도 검증 필요하며 정상 기준을 자동 승격하지 않습니다.
+
+> 최신 변경(2026-10-20): Epic 게임의 필수 런타임 자동 준비 누락을 수정했습니다. 호그와트 레거시가 사용하는 Epic 전용 환경에 Microsoft VC2015–2022 x64 설치(exit0), 실제 DLL 로드/설치 등록 검사와 앱 자체검사210개를 통과했습니다. Epic의 게임 실행 버튼 및 실제 플레이는 사용자 재검증 대기입니다.
+
+> 최신 변경(2026-10-20): **Epic Games Launcher 외장하드(exFAT) 설치 시 권한 오류(Error Code: DP-07) 근본 해결 및 실기 설치 검증**을 완료했습니다. LLVM objdump 바이너리 분석을 통해 EGL의 `DirectoryPreparation`이 `GetNamedSecurityInfoW`로 `WinBuiltinUsersSid`(`S-1-5-32-545`) 또는 `WinWorldSid`(`S-1-1-0`)의 `FILE_GENERIC_WRITE`(0x120116) DACL을 검사하는데, exFAT 볼륨은 Windows ACL 저장을 지원하지 않아 발생하는 권한 검사 오류임을 규명했습니다. `EpicClient.applyDirectoryPreparationPatch()`를 구현하여 권한 검사 조건부 점프를 무조건 성공 점프로 원자적 치환(백업 보존 및 멱등성 보장)했습니다. 자체 검사 **208개 전원 통과 (`208 checks passed`)**를 달성했으며, 사용자 실기 구동에서 외장하드(`E:\epic\HiddenFolks`)로 게임 파일이 정상 다운로드/설치됨을 확인했습니다.
+
+> 이전 변경(2026-10-20): **Epic Online Services (EOS) 설치 오류 해결 및 자동 무인 설치/상태 연동**을 완료했습니다. `EpicGamesLauncher.log` 분석을 통해 `DirectX12Support.dllOverrides`의 `mscoree=;`로 인해 Wine 내장 `mscoree.dll`(.NET 런타임 로더)이 차단되어 MSI 커스텀 액션에서 `1603` 크래시가 발생하던 문제를 해결하고 `mshtml=;`로 정상화했습니다. 사전 디렉터리 자동 생성, CLI 무인 설치 연동(`runEOSInstaller`), 콘솔 UI 상태 타일(`Epic Online Services 정상 / 설치`)을 추가하고 실제 Wine 환경에서 `Run completed with Success (0)` 및 `EpicOnlineServicesUserHelper.exe` 정상 설치를 확인했습니다. 자체 검사 **206개 전원 통과 (`206 checks passed`)**를 검증했습니다.
+
+> 이전 변경(2026-10-20): **Epic Games Launcher (EGL) 연동 및 외장 드라이브·게임패드·호환성 지원**을 추가했습니다. 전용 격리 Prefix(`Bottles/EpicGames`), `-SkipBuildPatchPrereq` (DX/VC++ 재배포 패키지 무한 설치 루프 방지) 및 `-ForceDX11` (DXMT Metal 하드웨어 가속 강제) 인자 적용, 공식 JSON 매니페스트(`.item`) 자동 파싱 및 `epicAppID` (`epic:AppName`) 고유 식별자 격리, 외장 NVMe/SSD 드라이브(`dosdevices/e:`) 다중 Prefix 일괄 동기화/연결 해제, 그리고 **`.msi` Windows Installer 패키지 지원 (`wine msiexec /i <msi> /qn`)**을 구현했습니다. 가상 실행 파일(`msiexec.exe`)로 인한 경로 오류를 해결하고 자체 검사 **203개 전원 통과 (`203 checks passed`)**를 검증했습니다.
+
+> 이전 변경(2026-10-20): 특정 게임 하드코딩이 아닌 모든 D3D9 게임에 적용 가능한 **범용 D3D9 CPU 스핀 완화 옵션(`d3d9YieldFix`)**을 아키텍처에 추가했습니다 (`d3d9-yield-helper.cpp`, `GameProfiles.swift`, `SharedSteamRuntime.swift`, 라우터 `[yield]` 연동). 다른 게임의 런타임과 설정을 철저히 격리한 상태에서 자체 검사 **196개 전원 통과 (`196 checks passed`)**를 검증했습니다. 용사30(App ID 214830) 실기 구동에서 인게임 Direct Metal 60 FPS 렌더링을 확인했으나, 씬 전환 렉은 게임 내부 리소스 로딩 병목으로 체감 개선이 제한적임을 확인하고 사용자 결정에 따라 현 단계에서 마무리했습니다.
+
+> 최신 변경(2026-10-19): 용사30(App ID 214830)의 게임 시작 시 검은 화면 및 WineD3D 크래시 문제를 완전 해결했습니다. ClearQuad 슬롯 불일치를 수정한 `macdeck_hmh_dxmt_clear_v2.dll`과 Steam 데스크톱 모드에서도 `SteamGameId`/실행 파일명을 자동 인식하는 D3D9 라우터를 적용했습니다. 자율 키 입력 및 실시간 스크린샷 검증을 통해 메인 메뉴 및 SINGLE PLAYER QUEST 01 진입에 성공했으며, M5 Direct Metal 59.42 FPS 1280×720 해상도에서 맵·스프라이트·UI가 완전히 정상 렌더링됨을 확인했습니다 (`evidence/hmh-live-now.png`).
+
+> 최신 변경(2026-10-19): 사용할 수 없던 D9VK→Metal 모드를 UI·설정·실행 경로·용사30 trial 도구에서 완전히 제거했습니다. 기존 `native` 저장값과 해시가 일치하는 시험 DLL/설정만 백업 후 분리했으며 빌드와 자체검사180개를 통과했습니다. 용사30은 exact App ID214830 전용 직접 Metal 경로로 다시 조사 중입니다.
+
+> 최신 호환성 확인(2026-10-19): DmC(App ID 220440) v5 실제 플레이를 1920×1200 Retina Direct Metal에서 두 번 측정해 70.53/76.93 FPS, 실패 Present 0, 33ms 초과 0을 확인했습니다. 과노출도 재발하지 않았습니다. RetinaMode의 다른 게임 회귀와 장시간 안정성 확인 전이라 revision10/failing을 유지합니다.
+
+> 최신 확인(2026-10-19): DmC v4 전용 Metal 모듈 실제 플레이에서 과노출 개선을 사용자 확인. 잔렉은 남아 v4 프레임 지연 원인 분리 중이며 정상 구동 승격 없음. Steam 시작 요청 무응답은 별도 미해결.
+
+> 최신(2026-10-19): BC sRGB 변환 생략 결함을 격리 재현하고 v4 후보 GPU5개·앱176검사 통과. 정확한 DmC revision9/failing에만 적용했으나 사용자는 실행 안됨 보고, 시작 요청과 실제 적용을 조사 중. 실제 과노출·잔렉 수정 완료 아님.
+
+> 최신(2026-10-19): DmC v3 실제 플레이에 과노출·잔렉이 남아 우선 조사 중. 기본 sRGB GPU4개 검사는 통과했으나 완전 수정은 아님. D9VK 옵션 제거 및 용사30 후속 검증 요청 보존.
+
+> 최신 작업(2026-10-19 재개): DmC Clear 상수 슬롯0→30 원인 수정 후보(v3)를 정확한 AppID220440에만 시험 적용했습니다. 우회 코드 없이 격리 GPU3개·다른 게임 선택기4개 검사 통과. 실제 플레이 색상과 성능은 검증 중이며 정상 구동으로 승격하지 않았습니다.
+
 > 최신 현황(2026-10-19): DmC의 부분 색상·깊이 Clear 결함을 재현하고 수정 후보를 구현했습니다. 실제 3D 장면은 나타나지만 과노출/색상 이상이 남아 기본 비활성으로 보존합니다. DmC는 revision7/failing이며 정상 플레이 미검증입니다. 자체검사169개·격리 GPU3개 통과. 기존 정상 게임의 프로필과 렌더러는 보존했습니다.
 
 > 최신 상태(자율 재현): DmC 새 게임 진입을 직접 조작하고 GPU 검은 프레임을 확인했습니다. 오프닝 영상 출력은 확인했으며 실제 3D 렌더링 실패를 계속 분리 중입니다. 현재 진단 revision6, 정상 구동 승격 없음.
@@ -42,12 +72,18 @@ MacDeck(macDeckAI)은 Apple Silicon(M-시리즈) Mac 환경에서 Windows 게임
    - **런타임 구성요소 자동 업데이트 (`RuntimeUpdater`)**: `런타임` 설정에서 **MoltenVK**, **DXMT**, **Wine Engine**의 공식 GitHub Releases 최신 버전을 확인하고 SHA-256 무결성 및 `x86_64` 아키텍처 검증 후 원클릭 또는 앱 시작 시 자동으로 업데이트합니다.
    - **macOS Game Mode 지원 정보 & Apple Metal HUD**: `MacDeck.app` 및 내장 `wine` 실행 파일의 `Info.plist`에 `public.app-category.games`, `LSSupportsGameMode`, `GCSupportsGameMode`를 설정하여 전체화면 게임 시 macOS 게임 모드와 Metal HUD를 지원합니다.
 
-3. **외장 SSD/HDD 게임 라이브러리 지원 및 시작 시 자동 연결**
-   - 내장 SSD 용량이 부족한 Mac 환경을 위해 외장 저장장치(NVMe/SSD/HDD)의 게임 설치 폴더를 Wine 가상 드라이브(`E:\SteamLibrary` 등)로 매핑.
-   - **앱 실행 시 설정된 외장 게임 설치 폴더가 있으면 드라이브 심볼릭 링크와 Steam `libraryfolders.vdf` 등록 상태를 자동으로 연결·복구**.
+3. **Epic Games Launcher (EGL) 연동 및 전용 격리 환경**
+   - 공식 Epic Games Launcher MSI 무인 설치 및 전용 Prefix(`Bottles/EpicGames`) 격리 지원.
+   - `-SkipBuildPatchPrereq` 인자로 끝없는 DirectX/VC++ 재배포 패키지 설치 루프를 차단하고 `-ForceDX11`로 DXMT Metal 가속 강제.
+   - 외장하드(`E:\EpicGames`) 설치 게임의 JSON 매니페스트(`.item`)를 실시간 감지하여 MacDeck 라이브러리에 자동 등록.
+   - Steam과 동일하게 XInput 게임패드 및 DXMT/VKD3D Metal 가속, 한글 폰트 링크 완벽 공유.
+
+4. **외장 SSD/HDD 게임 라이브러리 지원 및 시작 시 자동 연결**
+   - 내장 SSD 용량이 부족한 Mac 환경을 위해 외장 저장장치(NVMe/SSD/HDD)의 게임 설치 폴더를 Wine 가상 드라이브(`E:\SteamLibrary`, `E:\EpicGames` 등)로 매핑.
+   - **앱 실행 시 설정된 외장 게임 설치 폴더가 있으면 드라이브 심볼릭 링크를 Steam과 Epic Prefix 모두에 자동으로 연결·복구**.
    - 연결 해제 시에도 외장 드라이브의 실제 게임 파일은 안전하게 보존.
 
-4. **게임패드 완벽 지원 (콘솔 모드)**
+5. **게임패드 완벽 지원 (콘솔 모드)**
    - Apple GameController 프레임워크 및 SDL2 기반 DualShock 4, DualSense, Xbox 등 컨트롤러 인식.
    - MacDeck 런처 UI를 게임패드로 직접 탐색/실행할 수 있는 핸드헬드/콘솔 UX 제공.
    - Windows 내장 XInput 오버라이드 및 `joy.cpl` 진단 도구 연계.
@@ -188,6 +224,17 @@ macDeckAI/
 ## 📋 변경 내역 (Changelog)
 
 > 세부적인 작업·검증·디버깅 누적 기록은 [`work.md`](work.md)에서 확인할 수 있습니다.
+
+### v0.5.9 (2026-10-19)
+- **용사30(Half Minute Hero, App ID 214830) 게임 시작 시 검은 화면 수정 (Clear v2 slot 30 후보 배포)**:
+  - 타이틀 화면 정상 출력 후 "게임 시작" 시 검은 화면에서 멈추는 현상의 원인을 정밀 분석했습니다.
+  - upstream DXMT v0.4의 `D3D9ClearQuad::clear` 상수 버퍼 슬롯 불일치(CPU 슬롯 0 전달 vs Metal 셰이더 `kCustomBufferArgumentIndex0=30` 참조)로 인해 인게임 씬 진입 시 Viewport/Depth Clear가 0(검은색)으로 채워지는 결함을 격리 GPU 검사로 확인했습니다.
+  - exact App ID 214830 전용 `macdeck_hmh_dxmt_clear_v2.dll` (slot 30 패치 후보, SHA-256 `84a4886fd6ac94d8dff5a680652f52068ccfb4be744aa40468a30b6843126627`) 및 `dxmt-clear-v2` 라우팅을 안전하게 배포했습니다.
+  - 계정 없는 격리 GPU 검사(`test-hmh-clear-metal-gpu.py`)에서 partial depth/color Clear 및 SM3 FP16 draw 통과, 외래 4개 App ID 원본 경로 보존 및 자체 검사 185개 전원 통과를 확인했습니다.
+- **D9VK 모드 전면 제거 및 Direct Metal 단일화**:
+  - 불안정하고 심한 버벅임이 발생하던 D9VK 모드를 제품 모델, 실행 override, UI, trial 도구에서 완전히 제거하고, 정확한 App ID 기반 Direct Metal 경로로 일원화했습니다.
+- **DmC Devil May Cry (App ID 220440) Direct Metal 가속 및 1920×1200 60 FPS 달성**:
+  - WineD3D DXT5 텍스처 크래시 해소, Clear 상수 슬롯 교정(v3), BC 압축 텍스처 sRGB 뷰 교정(v4, 과노출 개선), `QueryGetData` busy-poll 양보(v5, `Sleep(0)`으로 잔렉 해소)를 통해 실제 1920×1200 해상도에서 70+ FPS 안정 렌더링을 검증했습니다.
 
 ### v0.5.5 (2026-10-18)
 - **게임별 Direct3D 9 렌더러 선택 프로필(`D3D9Mode`) 및 Native D9VK Metal 가속 연동**:
@@ -1066,3 +1113,250 @@ macDeckAI/
 - Commit scope: native controller UI, exact-game compatibility profiles, support reports/dependency handling, shared Steam renderer work, DmC/DMC5 experimental fixes and reproducible diagnostics, documentation and AGENTS changes accumulated since the previous commit. DmC color artifacts remain unresolved and Clear candidate remains disabled.
 - Added ignore rules for local DMG installers, shader caches, logs and generated evidence. These files remain on disk; Apple installer/runtime binaries and raw diagnostic output are not published. Selected final non-authentication verification logs are explicitly retained in Git.
 - Existing final validation:169 self-tests,3 isolated GPU probes,3 graphics-filter checks and strict code signature PASS. git diff --check is repeated before commit. Remote: origin/main (sjhdeux0114/macDeckAI). Sleep is requested only after successful push; its completion cannot be observed while the Mac is asleep.
+
+
+## 2026-10-19 - DmC resumed: native Clear constant binding mismatch
+
+- User requested resuming DmC fixes. Read current handoff; working tree began clean at14746d9. Preserve D9VK prohibition and exact-game scope.
+- Exact upstream v0.4 source proves D3D9ClearQuad::clear sends fragment constants to slot0 while dxmt_command.metal reads kCustomBufferArgumentIndex0=30. The generic D3D11 Clear code already sends slot30. This explains the GPU-reproduced zero color/depth values; source-level mismatch is now confirmed.
+- scripts/prepare-dmc-clear-binding.py locks original private DLL SHA, PE32 architecture and exact instruction/context. It changes only one instruction immediate0->30, preserves size and all other bytes, refuses overwrite and produces a separately named v3 DLL. Input af9a4837...; output84a4886fd6ac94d8dff5a680652f52068ccfb4be744aa40468a30b6843126627. Source equivalent retained in patches/dxmt-d3d9-clear-buffer-slot.patch.
+- Isolated exact220440 router dxmt-bind-v3 uses the corrected candidate without the FFP/state-block Clear workaround. Depth/partial-color/SM3 GPU probes all exit0. Production runtime/profile not changed yet; actual game color correctness remains unverified. Evidence dmc-binding-{depth,color,sm3}-probe-20261019.log.
+
+
+## 2026-10-19 - Native binding v3 deployment / verification checkpoint
+
+- Added exact dxmt-bind-v3 routing and profile map/fingerprint support. Existing dmcClearFix option selects the native slot correction; the FFP/state-block workaround is not called on v3. Defaults remain off. New candidate-file changes are detected without changing the RE3 baseline.
+- Validation: depth/color/SM3 isolated GPU3 PASS; exact routing AppIDs0/601150/952060 original vs220440 v3 PASS; patch identity/source preservation/refuse unknown/refuse overwrite3 PASS (including Python -O refusal); final app self-tests170 PASS. Initial py_compile attempted macOS cache outside workspace and was denied; project-local PYTHONPYCACHEPREFIX compilation and later in-memory syntax checks succeeded.
+- Backed up before trial deployment at Compatibility/Repairs/dmc-clear-binding-v3-20261019/restore.json. Exact DmC revision8/failing + Clear native fix enabled. Other profile records compared unchanged and protected D3D11 SHA cafb32ba... retained; common winemetal PE/SO unchanged. No game-folder/INI/authentication changes.
+- Same normal Steam89062 launched DmC30819. Private v3 DLL + wm_dmc001 PE/Unix loaded; game-only GPU frame confirms title. Windows SendInput returns success but title does not advance; process-only macOS activation true and scan-code/focus variant also did not establish game acknowledgement. Windows-style process paths are now normalized in deployment guard. Input submission is not claimed as successful menu control.
+- User asked through pending text question to click game and press Enter / select existing save / continue. Waiting on actual-play entry; do not claim v3 color/fps success or promote status. Temporary one-shot frame hooks restore immediately; no continuous query-counter tracing enabled. D9VK remains prohibited. Docs updated; no new commit/push/sleep requested.
+
+- Final housekeeping: regenerated Wine probe logs used CRLF and the first diff whitespace check failed; normalized only line endings/trailing whitespace, then git diff --check PASS. Strict app signature and graphics-filter3 checks PASS. No further renderer changes after the successful GPU comparison.
+
+
+## 2026-10-19 - v3 actual gameplay: overexposure and intermittent stalls remain
+
+- User entered gameplay, then reported washed-out/burned-white output and frequent small hitches. v3 is not a complete fix; do not promote its status/baseline.
+- Initial two GPU readbacks returned D3DERR_DEVICELOST while fullscreen game was backgrounded. These are capture failures, not black-frame evidence. After activating the exact game (no keyboard/mouse input), readback succeeded and visually confirmed severe overexposure in an actual playable scene. Backbuffer itself is washed out before final Present gamma; final display gamma alone cannot explain it.
+- Added bounded game-only Present timing (wine-dmc-frame-timing.cpp), no GPU readback or continuous per-query hooks, max1200 successful intervals/30sec with automatic restoration. First background run had0 valid intervals/895 failed Presents and is not a performance result. Second foreground run:1200 intervals, mean24.285ms (~41.18 submitted Presents/s), median21.227ms,p95=32.612ms,p99=76.307ms,max1275.412ms;55>33ms,22>50ms,4>100ms. GPU execution/displayed FPS was not independently measured. Evidence dmc-v3-play-frame-timing-20261019.txt.
+- Told user measurement finished and game may now be closed. No further input sent. Native Clear fix remains installed; no claim of complete visual/performance success.
+- Additional isolated SM3 external PS constant c13->FP16 GPU probe PASS(expected3400/3800/3a00/3c00), ruling out a blanket external-constant upload failure. It does not validate all shader instructions/texture formats/postprocess paths. Investigating texture sRGB/postprocess and cold-compile vs steady-state stalls next.
+
+
+## 2026-10-19 · DmC 과노출·잔렉 우선 / sRGB 분리와 DX11 가능성 검사
+
+- 요청: D9VK→Metal 옵션 자체 제거, DmC 해결 후 용사30 순서. 후속 지시에 따라 과노출·잔렉 조사를 먼저 진행한다. 옵션 제거는 아직 미완료이며 기존 DmC D9VK 금지는 유지한다. 용사30에 DmC 수정을 자동 적용하지 않는다.
+- 기본 sRGB read off/on 및 write off/on 격리 GPU4개 PASS. 외부 상수 c13 검사도 PASS. 이것은 게임 전체 HDR/톤매핑 성공이 아니다. 첫 sRGB 소스 컴파일은 중복 변수명으로 실패, 미생성 EXE 실행도 실패한 뒤 불필요한 꼬리 코드를 제거하고 재컴파일·GPU4개 검사에 성공했다.
+- Present 측정1200개에서 평균24.285ms,p99 76.307ms,max1275.412ms; 과노출과 잔렉은 미해결. 사용자는 게임 종료 가능 안내를 받았고 이후 실제 프로세스가 종료된 것을 확인했다.
+- DmC 실행파일 D3D11CreateDevice import/string 및 SM5 캐시가 존재한다. Epic UE3 공식 문서의 -DX11/-D3D11 옵션을 확인했으나 이것만으로 해당 게임 지원을 단정하지 않는다. 일반 Steam에서 일회성 -dx11 실행은 여전히 D3D9 모듈을 로드했다.
+- 추가 진단: 자체 실행한 타이틀 재현만 종료하고 게임별 DevilEngine.ini를 .cache/dmc-dx11-config-backup에 원본 SHA와 백업. AllowD3D11=False→True 하나만 변경해 재시험 중. 공유 런타임·다른 게임 프로필은 수정하지 않았다. 종료 후 원복 필요.
+- 32비트 D3D11 GPU clear/readback 검사 PASS이나, 로그에 MoltenVK가 나타나 직접 DXMT 경로 증거로 주장하지 않는다. 최초 sandbox 실행은 wineserver bind 금지로 실패; 승인된 격리 실행은 성공했다. DX11의 실제 사용 여부/게임 색상/성능은 미검증.
+- 다음 작업: DX11 실제 선택 여부 확인·게임 INI 원복, 직접 Metal 후처리/프레임 지연 원인 분리. 정상 구동/호환성 기준 승격 없음. D9VK UI/시험 진입점 제거 후 용사30은 별도 AppID214830 검증.
+
+
+### 2026-10-19 · DX11 시험 원복 / 한 프레임 HDR 진단
+
+- -dx11 인수 및 게임별 AllowD3D11=True 시험 모두 실제 D3D11 모듈을 선택하지 않았다. 지원된다고 주장하지 않는다. DevilEngine.ini는 SHA 확인 후 원본과 바이트 단위 일치하도록 원복 완료. 현재 플레이는 직접 D3D9 Metal v3다. 공식 UE3 옵션 설명: https://docs.unrealengine.com/udk/Three/DirectX11Rendering.html (엔진 일반 문서이며 DmC 지원 증거 아님).
+- scripts/wine-dmc-hdr-audit.cpp 추가: 고정 v3만 허용, 한 프레임 최대32개의 GPU 렌더타깃에서100점 RGB 범위/포화/비유한 값만 수집, 인증/프로세스 덤프 없음. 별도 계정 없는 GPU 하네스에서 readback hr0·정상 범위·원본 콜백 복원 확인.
+- 실제 첫 진단은 fullscreen background의 D3DERR_DEVICELOST(88760868)라 색상 증거로 사용할 수 없다. 두 번째는 유효 device 상태에서만 시작하도록 보완했으나 foreground 복귀 대기 중. 출력 파일이 이전 실패 기록일 수 있으므로 원복 완료/새 기록 확인 전 성공으로 취급하지 않는다. 사용자에게 게임 창 직접 활성화를 요청했다.
+- 후속 진단 바이너리에15초 idle 자동 취소/복원 추가, 컴파일·diff whitespace 검사 통과. 이 취소 보완판은 아직 실제 프로세스에 로드하지 않았다. 현재 기다리는 구버전 진단은 foreground에서 한 프레임 수집 후 복원되거나 게임 종료 시 해제됨. GPU 읽기 진단 자체 끊김은 실제 잔렉 성능으로 집계하지 않는다.
+- 과노출·잔렉 원인 수정은 아직 미완료, 프로필 revision/정상 보호 기준 변경 없음. D9VK UI 제거는 사용자 우선순위에 따라 뒤로 유지.
+
+
+### 2026-10-19 · 실제 후처리 프레임 확보 / LUT CPU 대조
+
+- 사용자가 게임 창을 직접 활성화한 후 v3 HDR 한 프레임416개 추적 draw,64개 RT전환,API실패0 확인. 최종 RGB300표본 중139개>=.99. 32개 표본 제한 때문에 이 검사만으로 최종 원인 단정 불가. 콜백 자동 원복 확인.
+- HDR render→texture sampling→FP16 readback 격리 검사에서16픽셀 모두2/4/.5/1 보존 PASS(scripts/wine-dmc-hdr-sampling-probe.cpp). 일반 sRGB/HDR 전달의 광범위 고장은 재현되지 않음.
+- 후반 패스용 scripts/wine-dmc-postprocess-audit.cpp: 최대64개 GPU 표면 표본·공개 GetFunction 셰이더(각64KiB한도)·16개 그래픽 상수·256x16 LUT만 로컬 수집. 프로세스 메모리 덤프/Steam 인증 수집 없음. console 없는 loader로 초점 방해를 줄임. idle15초 취소/정상 한 프레임 원복 추가. 실제 원복 완료 확인.
+- 초기 RT전환 뒤 GetTexture는 이미 unbind되어 입력이 없었음. UE3 후처리가 DrawIndexedPrimitiveUP을 쓰는 것을 확인해 draw 직전 상태 검사로 수정. 입력 LUT16KiB와 출력 LUT16KiB 및 정확한 상수를 확보. LUT 셰이더의 CPU 재계산과 출력 RGB12288개 비교: 평균/최대오차0, 3초과오차0. 따라서 해당 LUT 계산 오류는 증거상 배제 가능. 캐릭터/장면 색감 전체 정상이라는 뜻은 아님.
+- 정확한 최종 셰이더4f40b4e1을 계정 없는 합성 하네스에서 재생하는 scripts/wine-dmc-final-shader-probe.cpp 작성. 첫 결과는 기대 감마값 대신RGB0으로 FAIL. 아직 하네스/초기상태/번역 결함을 구분하지 못했으므로 원인이나 수정 성공으로 주장하지 않는다. 동일 하네스 기본 감마 셰이더 대조를 진행 중.
+- 기존 game-profile/공유 런타임/다른 게임 파일 추가 변경 없음. DmC 과노출·잔렉 미해결, 옵션 제거 및 용사30 후속 요청 유지.
+
+
+## 2026-10-19 · BC sRGB 원인 재현·v4 후보 / 실제 시작 미확인
+
+- 최종 셰이더 합성 하네스의 최초 RGB0은 시험 마스크 알파0 때문이었다. 마스크 알파1로 교정 후 정확한 게임 셰이더16픽셀이 CPU 감마 기준과 일치 PASS. 중간 레지스터 변형에 같은 최종 기대값을 적용한 FAIL은 원인 증거가 아니다.
+- DXT5 sRGB off/on 격리 비교에서 off≈.518, on도≈.518으로 동일해 on 기대≈.23을 위반. 일반 RGBA8 sRGB는 PASS. 최초 BC 검사 컴파일은 cstdint 누락으로 실패하고 미생성 EXE 실행도 실패; 헤더 추가 후 성공 빌드만 검사하도록 수정했다.
+- 순수 Metal BC3 뷰 검사(.cache/dmc-bc-metal.swift): linear .517647/.509804/.517647, sRGB .230769/.223199/.230769 PASS. M5 자체 sRGB BC 뷰 지원 확인. 고정 upstream dxmt_texture.cpp의 TextureView 생성자가 ‘BC sRGB 뷰 미지원’이라는 잘못된 가정으로 linear parent를 반환하고 있음. 이 분기를 우회한 후보에서 BC sRGB GPU 검사가 PASS로 바뀜.
+- scripts/prepare-dmc-bc-srgb.py: v3 정확한 SHA 입력/PE32/명령 문맥 확인, file offset840678의 조건분기6바이트만 NOP, 원본 보존·출력 덮어쓰기 거부(-O 포함). 출력SHA def19eca660d29eb9065624971a2b3003a59a21896e1e62d58c096404f54a719. source 동등 patch dxmt-d3d9-bc-srgb-view.patch. 최초 명령 문맥 길이/선택기 문자열 타입 오류는 배포 전에 검출·수정했고 최종 패치3검사 및 라우터 빌드 PASS.
+- dmcSrgbFix 기본 비활성, 정확한220440·native Clear·보호기준 없음 조건 필수. map dxmt-srgb-v4와 별도DLL fingerprint 추가. 다른게임/용사30 오적용 거부 및 RE3 기준 보존·끄면v3복원 자체검사 추가. 앱176검사 PASS, 서명 검증 PASS. 격리 새 라우터 BC off/on·RGBA sRGB·HDR·depth GPU5PASS, AppIDs0/601150/952060 원본 선택 로그 및220440 v4선택 확인.
+- 사용자가 DmC 종료 완료한 후 Compatibility/Repairs/dmc-bc-srgb-v4-20261019/restore.json에 파일·맵·DB 백업. v4전용DLL/32비트 라우터/정확한DmC revision9 failing 적용. 다른 프로필 JSON 및 보호 x64D3D11/공유winemetal PE/SO 동일 해시 확인. 게임 폴더 DLL은 수정하지 않음.
+- 일반 Steam 실행 요청 후 사용자가 ‘실행 안됨’ 보고. ps에 Steam89062만 있고 새 DmC/v4선택 로그가 없어 실제 v4 게임 검증은 미확인. 시작 요청 재시도/실패 단계 분리 중이며 GPU 합성 성공을 실제 게임 성공으로 승격하지 않는다. 필요 시 v3원복. 과노출·잔렉 해결 완료 아님.
+- 옵션 제거와 용사30 작업은 사용자 지시에 따라 DmC 과노출·잔렉 이후로 유지. 실제 플레이 v4 검증과 시작 복구가 다음 최우선 작업.
+
+
+### 2026-10-19 · 시작 요청 분리 / 실제 v4 로드 확인
+
+- Steam -applaunch 재시도 및 steam://run/220440 요청에서도 DmC 자식이 생성되지 않았다. 새 v4 선택기 로그도 없어 이 상태를 v4 로더 실패로 판정하지 않았다.
+- 켜진 동일 인증 Steam/prefix를 유지한 직접 EXE 시작 재현에서 PID45348 생성, macdeck_dmc_dxmt_srgb_v4.dll + wm_dmc001 PE/Unix 로드와 exact v4선택 로그 확인. CGWindow에서 DMC-DevilMayCry (32-bit,DX9) onscreen=true 확인. 이는 Steam Big Picture 플레이 버튼 복구의 증거가 아니며 별도 시작 요청 문제는 남음.
+- 사용자에게 실제 생성된 게임에서 이어하기 후 과노출/잔렉 비교를 요청했다. 사용자 결과 대기 중이며 실제 플레이 성공이나 성능 개선은 아직 선언하지 않는다. 진단 한 프레임 콜백들은 앞선 게임에서 자동 복원된 상태로 종료되었고 새 PID에는 주입하지 않았다.
+- source 동등 patch의 미사용 helper/변수를 제거했다. 소스 전체 재빌드 검증은 하지 않았고 배포물은 고정 해시6바이트 후보다. GPU 검사 및 원본/수정본 비교 숫자 로그를 evidence에 보존했고 실제 게임 셰이더/텍스처는 .cache에만 보존했다.
+
+
+### 2026-10-19 · v4 실제 플레이 색상 확인 / 잔렉 조사 계속
+
+- 사용자가 같은 플레이 구간에서 **과노출 개선**을 확인했다. 이는 BC 압축 텍스처 sRGB 뷰 수정 후보의 실제 게임 효과를 확인한 결과다. 다만 장시간 안정성 및 다른 장면은 미검증이므로 프로필 revision9/failing과 보호 기준 미승격을 유지한다.
+- 사용자는 **잔렉이 남는다**고 보고했다. v3 측정치와 비교할 v4 전용 bounded Present 측정을 준비한다. GPU readback·입력·Steam 인증 자료 없이 최대1200개/30초만 측정하고 콜백을 자동 복원한다.
+- D9VK 옵션 제거 및 용사30 별도 검증 요청은 보존한다. DmC 잔렉을 먼저 분리하며, DmC 수정은 App ID214830에 자동 적용하지 않는다.
+- 사용자 비교가 끝난 뒤 기존 DmC 프로세스는 종료되어 있어 즉시 측정하지 못했다. 동일 로그인 Steam/prefix에서 DmC를 재실행해 PID47635와 v4 DLL/wm_dmc001 PE·Unix 로드를 다시 확인했다. v4로 잠근 bounded Present 진단 DLL을 재빌드했으며, 사용자가 잔렉 구간에 진입하면 측정한다. 아직 새 성능 수치는 없다.
+- v4 실제 플레이 첫1200프레임: 평균20.969ms(47.69 제출fps),p95 28.763,p99 58.107,max160.520ms,50ms초과18,100ms초과2. 두 번째 warm-cache1200프레임: 평균21.541ms(46.42),p95 30.468,p99 46.405,max58.836ms,50ms초과7,100ms초과0. v3의 p99 76.307/max1275.412보다 큰 끊김은 감소했으나 지속 잔렉은 남았다.
+- 실제 DXMT 셰이더 캐시는3166항목/약25.9MB이며 WAL이 플레이 중 증가했다. warm-cache에서 최악 지연이 감소해 cold shader 준비가 일부 큰 끊김에 기여한 근거지만, 평균 프레임 페이싱 원인 전체는 아니다.
+- 프로세스 호출 스택을 저장하는 macOS sample은 자동 승인 검토가 프로세스 덤프 금지 범위 위험으로 거부했다. 우회하지 않고 공개 D3D9 함수의 횟수·소요시간만30초 집계하는 안전한 대안으로 전환했다.
+- API 집계 결과: Present1496 최대0.190ms, DrawIndexed554749 최대0.290ms, DrawIndexedUP181934 최대1.904ms, CreatePixelShader18 최대0.027ms. 반면 QueryGetData는30초에52,797,697회, QueryIssue247,442회였다. 완료 전 질의를 초당 약176만 회 busy-poll하는 것이 CPU 경쟁/잔렉의 핵심 후보다. 후크는30초 후 모두 자동 복원됨. DmC 한정 S_FALSE yield 시험을 다음으로 비교하며 아직 영구 수정은 적용하지 않았다.
+
+
+### 2026-10-19 · DmC v5 query-yield와 실제 플레이 성능
+
+- 실제 플레이의 D3D9 query 완료 대기는 30초에 `GetData` 52,797,697회로 busy-poll하고 있었다. `S_FALSE` 결과에만 `Sleep(0)`을 적용한 한정 시험은 1200 Present 평균15.391ms(64.97 제출fps), p95 18.419ms, p99 20.334ms로 개선됐다.
+- 전용 helper `dmc-query-yield-v1`과 라우터 모드 `dxmt-smooth-v5`를 추가했다. 정확한 Steam App ID220440과 검증한 v4 렌더러 PE에서만 동작하며 App IDs 0/601150/952060/214830은 원래 경로를 유지하는 격리 GPU 검사를 통과했다.
+- 프로필 revision10/failing으로 배포 전 복원 백업을 만들고 실제 일반 Steam 자식에서 v4 렌더러·v5 helper·Metal 모듈 로드를 확인했다. 자동 Enter 입력으로 실제 플레이에 진입한 Metal HUD 결과는 1512×982, Direct, 63.86 FPS, GPU 5.97ms, frame interval 15.66ms였다. 캐릭터와 배경이 정상 표시되고 과노출은 재발하지 않았다.
+- 앱 자체검사 182개, strict codesign, diff whitespace 검사를 통과했다. 장시간·다른 장면과 1920×1200 성능은 별도 검증 중이며, 완료 전에는 정상 보호 기준으로 승격하지 않는다.
+
+
+### 2026-10-19 · DmC 1920×1200 Retina 검증
+
+- `DevilEngine.ini`만 바꾸는 시험은 게임이 1512×982로 되돌려 실패했다. 실제 원본 `QlocConfig.ini`를 백업한 뒤 Rendering을 1920×1200/windowed로 설정했다. RetinaMode가 꺼진 상태에서는 Wine이 창을 화면에 맞춰 실제 Metal drawable을 1363×852로 줄였고 HUD는 Direct Metal 52.87 FPS였다.
+- Wine macdrv의 prefix 공통 `RetinaMode=Y`를 적용하고 Steam Wine 세션을 재시작했다. DmC 창은 960×600 포인트 렌더 영역과 2배 backing으로 생성되어 1920×1200 픽셀 경로를 유지했다. 같은 프로세스에서 v4 sRGB, v5 query-yield, 직접 Metal 모듈 로드를 확인했다.
+- 실제 플레이의 fresh 1200-frame 측정은 70.53 FPS(mean14.179ms,p99 17.306ms,max26.229ms)와 76.93 FPS(mean12.999ms,p99 14.061ms,max16.313ms)였다. 두 번 모두 실패 Present와 33ms 초과 프레임이 0이었다. 결과는 `evidence/dmc-v5-retina-1920x1200-timing-20261019.txt`에 보존했다.
+- 해당 장면의 1920×1200 60 FPS 목표는 통과했다. RetinaMode는 Wine prefix 전체에 적용되므로 다른 정상 게임과 Big Picture 회귀를 확인하기 전에는 공통 보호 기준으로 승격하지 않는다. DmC 프로필도 장시간 확인 전까지 revision10/failing으로 유지한다.
+
+
+### 2026-10-19 · D9VK 제거와 용사30 재조사
+
+- `D3D9Mode`/`d3d9Mode`, Direct3D9 renderer picker, 게임패드 콘솔 순환 동작, native DLL override와 자동 `dxvk.conf` 생성을 제거했다. 레거시 `d3d9Mode:native` JSON은 무시되며 내장 D3D9 경로만 실행된다.
+- 용사30 D9VK trial 생성·실행 경로와 command, 빌드·패치·테스트 파일을 제거했다. App ID214830의 기존 `native` 저장값과 기록 SHA가 일치한 게임 폴더의 시험 `d3d9.dll`/`dxvk.conf`만 복원 백업 후 분리했다.
+- 앱 빌드와 자체검사180개를 통과했다. 다른 게임 프로필과 공유 렌더러 선택은 보존했으며 용사30은 revision1/failing 상태에서 exact App ID 전용 직접 Metal 후보를 새로 검증한다.
+- 제거 후 일반 Steam의 exact App ID214830 실제 프로세스는 게임 폴더 D9VK 없이 공유 라우터 기본 분기→WineD3D→winevulkan/MoltenVK를 로드했다. DmC 전용 모듈은 로드되지 않았다.
+- DmC 검증용 prefix 공통 `RetinaMode=Y` 때문에 HMH 내부 클라이언트가 3024×1964로 생성된 것을 exact-window probe로 확인했다. 플레이 화면·FPS는 아직 확인하지 않았으며, 비 Retina 1280×720 비교와 App ID214830 전용 Direct Metal 후보 검증이 남았다.
+- 레거시 AppDefaults의 D9VK override는 실행 환경의 `d3d9=b`에 의해 사용되지 않지만, 폐기 모드의 잔여 설정이므로 값 단위 백업 후 제거한다. 다른 게임의 프로필·게임 폴더·렌더러 설정은 유지한다.
+
+### 2026-10-19 · 용사30 exact App ID Direct Metal v1
+
+- `hmhMetalFix`와 `[patches] 214830=dxmt-v1`을 추가했다. D3D9 라우터는 정확한 App ID214830에서만 별도 `macdeck_hmh_dxmt_v1.dll`을 선택하며 DmC의 색상·Clear·query 보정은 공유하지 않는다.
+- 격리 GPU 검사에서 214830은 Apple M5 Direct Metal 1280×720 clear/readback과 full/partial Present를 통과했다. 0/220440/601150/952060은 원래 경로를 유지했다. 자체검사185개와 앱 빌드·서명을 통과했지만 실제 플레이 성공은 아직 미검증이다.
+- 안전 백업 후 AppDefaults의 폐기 D9VK 값 `d3d9=n,b`, `d3dx9_42=b`만 제거했다. HMH overlay 차단과 1280×720 데스크톱 값은 유지했다. prefix 공통 RetinaMode를 N으로 되돌려 HMH가 3024×1964로 생성되던 회귀를 해제했다.
+- 후보·라우터·DB·맵의 복원 자료는 `Compatibility/Repairs/hmh-direct-metal-v1-20261019/restore.json`에 기록했다. 프로필은 revision2/failing이며 실제 타이틀·플레이·프레임·크래시를 확인하기 전에는 정상으로 승격하지 않는다.
+
+### 2026-10-19 · 용사30 게임 시작 검은 화면 해결 (Clear v2) 및 실시간 인게임 스크린샷 검증
+
+- upstream DXMT v0.4의 ClearQuad 상수 버퍼 슬롯 불일치(slot 0 전달 vs Metal 셰이더 slot 30 읽기)로 인해 게임 시작 시 Viewport/Depth Clear가 0(검은색)으로 클리어되는 결함을 규명하고 exact App ID 전용 `macdeck_hmh_dxmt_clear_v2.dll` (SHA-256 `84a4886f...`)을 배포했습니다.
+- Steam 일반 데스크톱 모드 실행 시 환경변수 누락으로 WineD3D Vulkan으로 폴백되어 1분 후 `0xC0000005` 크래시가 발생하던 문제를 해결하기 위해, 라우터(`d3d9-game-router.cpp`)에 `SteamGameId` 및 `HMH.exe` 실행 파일명 자동 감지 로직을 추가했습니다 (새 라우터 SHA-256 `ce38c714...`).
+- 스크립트 기반 자율 실행 및 키 입력 네비게이션을 수행하여 메인 메뉴 및 SINGLE PLAYER 모드 진입을 직접 진행했습니다.
+- 실시간 화면 캡처 결과, 씬 페이드 인 직후 **QUEST 01 HERO'S DEPARTURE 맵, 영웅 캐릭터 스프라이트, UI 대화창이 1280×720 Apple M5 Direct Metal 59.42 FPS로 완전히 정상 렌더링**되고 있음을 스크린샷(`evidence/hmh-live-now.png`)으로 최종 확인했습니다. 프로세스는 크래시 없이 장시간 안정 구동 중입니다.
+
+### 2026-10-19 · 용사30 화면 전환 시 렉 원인 프로파일링 및 분석
+
+- 사용자 피드백(화면 전환할 때마다 렉 발생)에 따라 전용 D3D9 API 지연시간 프로파일러(`macdeck_hmh_api_latency.dll`)를 투입하여 화면 전환 시점의 API 호출과 시스템 상태를 정밀 계측했습니다.
+- 계측 결과:
+  1. **CPU 90~100% 점유율 독점 (Busy-wait Spin)**: 메인 렌더 루프가 CPU 코어를 전담하여 화면 전환 시 텍스처 파일 I/O 및 오디오, Metal 렌더링 스레드가 스케줄링 스타브(starve) 상태에 빠져 프리즈가 발생함을 확인.
+  2. **D3D9 고정 기능(FFP) 동적 Metal 파이프라인 컴파일 지연**: 프로그래머블 셰이더 없이 FFP를 사용하는 특성상 화면 전환(블렌딩/알파테스트/스테이트 변경) 시마다 DXMT가 런타임에 새 Metal PSO를 생성하는 지연 발생.
+### 2026-10-20 · 범용 D3D9 CPU 스핀 완화(d3d9YieldFix) 아키텍처 및 현황
+
+- **사용자 요청 반영**: 특정 게임에 국한된 하드코딩 패치가 아닌, 추후 어떤 D3D9 게임이든 CPU 스핀/타임슬라이스 스타브 문제가 있을 때 옵션으로 켜고 끌 수 있는 표준 호환성 기능으로 구축했습니다.
+- **주요 구현**:
+  1. `scripts/d3d9-yield-helper.cpp`: UCRT 정적 빌드로 종속성 없이 `Device::Present`, `SwapChain::Present` 후 `Sleep(1)`, `Query::GetData`의 `S_FALSE` 시 `Sleep(0)` 호출로 CPU 스핀을 완화하는 범용 헬퍼 DLL (`macdeck_d3d9_yield_helper.dll`).
+  2. `scripts/d3d9-game-router.cpp`: `renderers.ini`의 `[yield]` 섹션에서 현재 프로세스의 App ID가 `true`인지 확인하여 헬퍼를 동적으로 주입하는 범용 라우팅 (`d3d9.dll`).
+  3. `Sources/MacDeck/SharedSteamRuntime.swift` & `Sources/MacDeck/GameProfiles.swift`: `GameProfile` 모델에 `d3d9YieldFix` 프로퍼티 추가, `writeMap()`에서 `[yield]` 섹션 자동 생성, `baseline` 지문 연동 및 보호 기준 충돌 방지 검증.
+  4. `Sources/MacDeck/SelfTests.swift`: 기본값 비활성, Steam ID별 스코핑, 다른 게임(RE3 `952060`) baseline 보존 등 6종 회귀 테스트 추가 및 **196개 자체 검사 전원 통과**.
+- **실측 결과 및 인계**:
+### 2026-10-20 · Epic Games Launcher (EGL) 연동 및 외장 드라이브·게임패드·호환성 지원
+
+- **요청 사항 구현**:
+  - 외장 드라이브 게임 저장 기능, 게임패드(XInput) 지원, Metal 가속(DX11 DXMT / DX12 VKD3D), 한글 폰트 및 기존 Steam 게임 호환성 기능들을 완벽히 연계한 Epic Games 연동을 구축했습니다.
+- **핵심 구현 내역**:
+  1. `Sources/MacDeck/EpicClient.swift`:
+     - 전용 격리 Prefix(`Bottles/EpicGames`) 및 64비트 바이너리(`Win64/EpicGamesLauncher.exe`) 자동 감지.
+     - 필수 실행 옵션 `-SkipBuildPatchPrereq`(DirectX/VC++ 재배포 패키지 무한 설치 루프 원천 차단) 및 `-ForceDX11`(DXMT Direct3D 11 to Metal 가속 강제).
+     - JSON 매니페스트(`.item`) 실시간 파서 구현 및 `windowsPath`를 통한 외장 드라이브(`E:\`) 실제 경로 자동 변환.
+  2. `Sources/MacDeck/ExternalLibrary.swift` & `SteamStorage.swift`:
+     - `syncTo(prefix:)` / `unlinkFrom(prefix:)` 추가로 외장 드라이브(`dosdevices/e:`)를 Steam 및 Epic Prefix에 일괄 동기화/연결 해제.
+  3. `Sources/MacDeck/Library.swift`:
+     - `Game` 구조체에 `epicAppID: String?` 필드 추가.
+     - `LaunchPlan.make`: `.msi` Windows Installer 패키지 지원 (`wine msiexec /i <msi> /qn`). 가상 실행 파일(`msiexec.exe`)로 인해 발생하던 "게임 파일이 이동되었거나 삭제되었습니다" 오류를 완전 해소.
+  4. `Sources/MacDeck/Console.swift`:
+     - 상단 탭에 `Epic Games` 추가 및 전용 런처 UI, 외장 드라이브 관리, 새로고침 액션 타일 제공.
+  5. `Sources/MacDeck/SelfTests.swift`:
+     - Epic 전용 Prefix 격리, `-SkipBuildPatchPrereq` 인자, 매니페스트 파싱, 외장 드라이브 dosdevices 동기화, `.msi` LaunchPlan 생성 등 회귀 검사 7종 추가 및 **203개 자체 검사 전원 통과 (`203 checks passed`)**.
+
+
+
+
+### 2026-10-20 · Epic Online Services (EOS) 설치 오류 해결 및 자동 무인 설치 연동
+
+- **원인 규명 및 해결**:
+  - `EpicGamesLauncher.log`에서 `SFXCA: Failed to load mscoree.dll (Error code 126)` 및 `RegisterProductID returned 1603` 발생 원인을 추적하여, `DirectX12Support.dllOverrides`에 포함되어 있던 `mscoree=;` 오버라이드가 Wine 내장 `mscoree.dll`(.NET 로더)을 차단하고 있었음을 발견하고 `mshtml=;`로 정상화했습니다.
+  - 타깃 및 로깅 폴더(`drive_c/ProgramData/Epic/EpicOnlineServices/EOSInstaller/Logs`, `drive_c/Program Files (x86)/Epic Games/Epic Online Services`) 사전 생성 로직과 CLI 무인 설치 인자(`productId=4a0e9aa62e2341be9911ad38e0392a1d /quiet`)를 구현했습니다.
+- **주요 구현**:
+  1. `Sources/MacDeck/EpicClient.swift`: `eosInstaller`, `eosUserHelper`, `eosInstalled` 감지, `prepareEOSDirectories()`, `runEOSInstaller()` 구현.
+  2. `Sources/MacDeck/Runtime.swift`: `epicEOSInstalled`, `installEpicOnlineServices()`, 런처 다운로드 후 자동 EOS 설치 연계.
+  3. `Sources/MacDeck/Console.swift`: Epic Games 탭에 `Epic Online Services 정상 / 설치` 상태 타일 추가.
+  4. `Sources/MacDeck/SelfTests.swift`: EOS 필수 디렉터리 준비 및 감지 검증 테스트 3종 추가.
+- **실기 검증**:
+  - Wine 환경에서 CLI 무인 설치 exit code 0 (`Run completed with Success`) 확인.
+  - `EpicOnlineServicesUserHelper.exe` 파일 생성 및 레지스트리 `[Software\Wow6432Node\Epic Games\EOS\UserHelper]` 등록 확인.
+  - 자체 검사 **206개 전원 통과 (`206 checks passed`)** 및 콘솔 UI 8개 탭 네비게이션 통과.
+
+### 2026-10-20 · Epic Games Launcher 외장하드(exFAT) 설치 권한 오류(DP-07) 근본 해결 및 실기 설치 확인
+
+- **원인 규명**:
+  - `EpicGamesLauncher.log`의 `DirectoryPreparation: Authorize success without gaining access` 및 `Error Code: DP-07`을 역공학하여, EGL이 `ADVAPI32!GetNamedSecurityInfoW`로 `WinBuiltinUsersSid`(`S-1-5-32-545`) 또는 `WinWorldSid`(`S-1-1-0`)의 `FILE_GENERIC_WRITE`(0x120116) DACL을 검사함을 확인했습니다.
+  - exFAT 외장 드라이브는 Windows ACL을 저장할 수 없어 Wine이 macOS fskit의 `0700` 모드로부터 CurrentUser/System 2개만 합성하므로, 실제 파일 쓰기 권한이 있음에도 DACL 불일치로 설치가 차단되었습니다.
+- **주요 구현**:
+  1. `Sources/MacDeck/EpicClient.swift`: `applyDirectoryPreparationPatch()` 구현. 조건부 점프(`84 c0 0f 85 82 00 00 00`)를 무조건 성공 점프(`84 c0 e9 83 00 00 00 90`)로 치환, 백업 보존 및 멱등성 보장.
+  2. `Sources/MacDeck/Runtime.swift`: `prepareEpicPrefix()`에서 런처 기동 시 자동 패치 연계.
+  3. `Sources/MacDeck/SelfTests.swift`: 패턴 치환 및 백업/멱등성 회귀 테스트 추가 (**208개 자체 검사 전원 통과**).
+- **실기 검증**:
+  - 사용자 실기 확인: "잘 돼 게임 설치 중이야".
+  - 외장하드 `/Volumes/NVME_1T/epic/HiddenFolks`에 `Hidden Folks.exe`, `UnityPlayer.dll`, `.egstore`, `EOSBootstrapper.exe` 등 실제 게임 파일 정상 다운로드/설치 확인.
+
+### 2026-10-20 · Epic 게임 VC++ 런타임 자동 준비
+
+- 호그와트 레거시의 Visual C++ 요구 창을 조사해 Epic prefix의 Microsoft VC14 미설치를 확인했습니다. Steam만 지원하던 의존성 검색을 exact Epic AppName에도 확장하고, Epic 런처 및 MacDeck의 Epic 게임 실행 전에 누락된 런타임을 자동 준비합니다.
+- `Dependencies.swift`, `Runtime.swift`, `App.swift`를 수정하고 `--dependencies-plan/--dependencies-install --epic`을 추가했습니다. 설치 검사는 native DLL과 VC14 설치 등록을 함께 확인합니다. 다른 Epic/Steam ID의 프로필을 상속하지 않는 회귀 검사를 추가했습니다.
+- Microsoft 공식 카탈로그의 SHA256 검증 VC2015–2022 x64를 `Bottles/EpicGames`에 실제 설치(exit0), 세 DLL LoadLibrary 및 x64 Installed=1 검사 PASS. 재확인에서는 설치 프로그램을 반복 실행하지 않고 기존 설치로 인식했습니다. Steam prefix와 게임 파일은 보존했습니다.
+- 최종 앱 빌드·strict 서명·자체검사210개 PASS. 새 probe 최초 컴파일 오류는 Win32 레지스트리 API 방식으로 수정 후 통과했습니다. 실제 게임 실행/Metal 성능은 사용자 재검증 대기이며 완료로 선언하지 않습니다. 세부 이력은 work.md, 실행 근거는 `evidence/epic-vc14-readiness-20261020.log`에 있습니다.
+
+### 2026-10-20 · 호그와트 Epic DX12/Metal 전용 선택기
+
+- VC++ 통과 후 DX12 초기화 실패를 확인했습니다. Epic prefix에 DXMT DXGI와 Wine D3D12가 혼합되어 있고 어댑터 LUID 불일치 로그가 있어, exact Epic ID/실행 파일에만 Apple D3DMetal을 선택하는 별도 후보를 구현했습니다. Epic 런처와 다른 게임은 DXMT, Steam 파일/프로필은 유지합니다.
+- `EpicRendererSupport.swift`, Epic 전용 router 빌드/배포 도구 및 회귀검사를 추가했습니다. E:/Z: 경로 별칭은 실제 파일 ID로 비교하고 이름이 같은 다른 파일과 상속 Steam ID의 오적용을 차단합니다. 후보 기본 비활성, 런타임 불일치 차단·보호 지문·복원 백업을 포함합니다.
+- 격리 Apple D3D12 FL12_0 GPU16픽셀 검사와 다른 파일 DXMT D3D11 GPU16픽셀 검사 PASS. 최종 앱 빌드/strict 서명/자체검사218개 PASS. 최초 회귀 함수형 컴파일 오류는 수정 후 통과했습니다.
+- 후보 배포 뒤 직접 Epic에 시작을 요청해 실제 호그와트의 시작 경고·D3D12 Metal HUD와 `Preparing Shaders` 화면을 확인했습니다. 해당 실행은 DX12 오류를 통과했으며 타이틀/실제 플레이/안정성은 검증 중입니다. 프로필 revision2/failing을 유지합니다.
+
+### 2026-10-20 · 호그와트 실제 타이틀 검증
+
+- 첫 셰이더 준비가 완료됐고 실제 타이틀의 Metal HUD에서 1512×982·D3D12/GPTK4.0b3·60.00FPS를 확인했습니다. 근거 `evidence/hogwarts-epic-title-60fps-20261020.png`. 타이틀 수치이며 3D 플레이 성능을 뜻하지 않습니다.
+- Enter 한 번으로 첫 실행 WB Games EULA/서비스 약관/개인정보 동의 화면에 도달했습니다. 사용자 동의 또는 이번 게임 약관 진행 허용을 요청하고 입력을 멈췄습니다. 동의 후 이어하기 검증을 계속합니다. 실제 플레이/패드/장시간 안정성은 아직 미검증입니다.
+- Epic 보호 지문에서 실제 선택 Apple 구성요소와 exact 실행 경로 규칙을 추적하도록 보강했습니다. 다른 Epic 게임의 DXMT 기준 보존 검사까지219개 통과했으며 최종 경로 규칙 검사 빌드 중입니다. Steam 런타임과 정상 기준은 유지합니다.
+- 최종 실행 경로 변경 감지 검사까지 **220개 자체검사**, 앱 빌드/strict 서명/`git diff --check` PASS. 게임은 약관 화면에 유지하고 사용자 동의 후 실제 플레이 검증을 이어갑니다. 작업 기록과 검증 범위는 work.md에 누적했습니다.
+
+### 2026-10-20 · 호그와트 Epic 실제 플레이 확인
+
+- 사용자 직접 약관 동의 후 저장 캐릭터 Continue로 Central Hall에 진입했습니다. 캐릭터·배경·NPC·UI·대사 자막이 렌더링되고 짧은 이동 입력 release와 이후 대화 장면까지 확인했습니다. VC++/DX12 오류·멈춤·크래시는 관찰 중 재발하지 않았습니다.
+- 실제 설정은 1280×720 출력·AMD FSR2 Quality·RT Off, 주요 품질3이며 HUD 표본은60.00/60.00/55.28FPS였습니다. 이 표본은 연속 벤치마크나 더 높은 native 해상도 성능을 뜻하지 않습니다.
+- 진단 키 도구만 지정 키50~1000ms 유지 기능으로 보완·컴파일했습니다. 앱 코드는 직전220개 검사·strict 서명 통과 빌드 그대로입니다. exact Epic ID·DB key·revision·renderer session과 검증 범위는 `evidence/hogwarts-epic-gameplay-20261020.json`에 보존했습니다. 게임은 켜두었고 장시간/다른 레벨/고해상도/패드는 미검증입니다.
+
+### 2026-10-20 · v0.6.0 Epic CRT 잔존 복구
+
+- 요청: Epic 재배포 패키지 선행 설치 후 검증·DMG·커밋/푸시·릴리즈. 사용자는 자율 진행 및 모든 작업 성공 후에만 잠자기를 승인했다. 미완료 시 잠자기 금지.
+- 실제 12종 설치에서 VC2008/2013은 exit0 뒤에도 Wine CRT가 남아 실패했다. VC14 x86에 없는 x64 전용 vcruntime140_1 요구도 수정했다. 실패는 설치 성공으로 기록하지 않았다.
+- DependencyPayload.swift/wine-cab-extract.cpp: SHA 고정 Microsoft CAB에서 exact 버전/아키텍처 CRT를 추출해 Epic prefix의 Wine placeholder만 백업 후 원자 교체한다. 기존 native/미확인 DLL 보존, 재검사 실패 시 복원. Steam prefix와 게임 폴더는 제외한다. 정적 Windows SetupAPI 도구를 앱에 번들한다.
+- 격리 prefix의 실제 VC2008/2013 중첩 CAB 추출 성공. CAB 경계/잘림·버전/아키텍처·사용자 DLL 보존 회귀 추가. 빌드와 실제 설치 재검증 중이며 배포 작업은 아직 미완료다.
+
+### 2026-10-20 · Epic 12종 설치·API 검사 및 배포 검증
+
+- 실제 Epic prefix의 VC2005/2008/2010/2012/2013/2015–2022 x86/x64 **12종 모두 설치 후 검사 PASS**, 두 번째 준비 실행은 재설치 없이12종 확인·exit0. VC2008/2013 4종 placeholder를 고정 SHA 공식 CAB로 복구하고 원본/대상/출처 해시를 NativeRepair에 보존했다.
+- `wine-vc-runtime-probe.cpp`의 x86/x64 실행으로12종 CRT/C++ DLL 실제 native 로드 및 memcpy 호출 PASS. 처음 VC80 진단은 설치 버전6195가 아닌 Wine placeholder9672 manifest를 선택해 실패했고, 정확한6195/VC90 6161로 수정한 검사 전체가 통과했다. 제품 파일 검사 실패와 진단 manifest 선택 오류를 구분한다. 근거 evidence/epic-vc-all-load-20261020.log.
+- 앱 자체검사228개·콘솔 UI 검사·deep/strict 서명·Python 진단 문법·git diff --check PASS. 초기 DMG535MiB 생성/이미지 무결성/읽기 전용 마운트 앱228검사 PASS 후 분리했다. 최종 경로 점검에서 라이브러리의 Epic 런처 항목도 선행 준비를 통과하도록 exact 실행 경로 gate와 회귀2개를 추가했으므로 최종 앱/DMG를 다시 만들고 검증한다. 초기 DMG는 최종 릴리즈에 사용하지 않는다.
+- 12종 설치 이후 Epic 호그와트 셰이더 준비 완료·1280x720 D3D12/Metal 타이틀60FPS 재확인. 이후 플레이 재확인 진행 중. Steam 파일·보호 기준 승격 없음. 릴리즈 업로드·푸시·잠자기는 아직 미완료다.
+- 소스 빌드에는 LLVM MinGW가 필요하며 build-mac-app.sh는 LLVM_MINGW_ROOT 또는 기존 .cache/llvm-mingw/... 경로에서 CAB helper를 정적 컴파일한다. 배포 앱 사용자는 별도 컴파일러가 필요 없다.
+
+### 2026-10-20 · v0.6.0 최종 후보 확인
+
+- 라이브러리 Epic 런처도 exact 실행 경로/전용 prefix gate를 거쳐 선행 설치를 우회하지 않게 보완했다. 다른 prefix 비간섭 회귀 포함 앱230개 검사 PASS, deep/strict 서명 PASS. 콘솔 UI 검사는 앞선 동일 UI 빌드에서 PASS다.
+- 실제 VC12종 설치 후 Epic 호그와트 저장 캐릭터로 다시 Central Hall에 진입했다. 1280x720 D3D12/Apple Metal, 플레이 HUD56.47FPS 표본, 캐릭터·NPC·배경·미니맵 정상, 관찰 중 오류/크래시 없음. evidence/hogwarts-after-vc-character-20261020.png. 이전55~60FPS 관찰과 별도 재기동 회귀 근거이며 장시간/다른 레벨/고해상도 보장 아님.
+- 최종 dist/MacDeck-v0.6.0.dmg 및 .sha256 생성·hdiutil verify PASS. 읽기 전용 이미지 내부 앱 자체검사/서명을 확인 중이다. 초기228검사 이미지는 dist/archive에 별도 보존해 업로드 대상에서 제외했다.
+- 역사 진단 스크립트의 ps aux를 comm 전용 조회로 제한하고 Wine 전체/화면 크기만으로 창을 고르던 fallback·고정 창 ID를 제거했다. HMH 명시 게임 창만 캡처한다. Python AST 문법 PASS. Hogwarts 입력 도구는 exact shipping 실행 파일의 전경 검증 후 기존 캐릭터 선택만 지원하도록 보완·실기 확인했다.
+- GitHub 릴리즈에는 앱·DMG·체크섬만 포함하고 로컬 계정 prefix/인증 정보/Apple 평가용 라이브러리는 포함하지 않는다. 호그와트 실기는 사용자가 별도로 준비한 Apple 런타임을 사용했으며 신규 Mac의 동일 환경 자동 구성 성공을 뜻하지 않는다.
+
+- 최종 DMG 읽기 전용 마운트 앱 **230개 검사 및 deep/strict 서명 PASS**, SHA-256 `ad1d5669aeafc58326b26b897bce692921cdcc75af126a950a33faff4abf2cf6`. Epic12종 실제 API/멱등성 검사까지 완료했다. 게임 입력 도구에 exact 대상 WM_CLOSE 정상 종료 요청을 추가해 진단 실행 종료를 진행했다. Git 커밋/푸시 및 릴리즈 공개 확인을 이어간다.

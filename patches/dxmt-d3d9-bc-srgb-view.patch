@@ -1,0 +1,50 @@
+--- a/src/dxmt/dxmt_texture.cpp
++++ b/src/dxmt/dxmt_texture.cpp
+@@ -45,45 +45,14 @@
+     allocation(allocation),
+     key(allocation->descriptor->fullView) {}
+ 
+-static bool
+-IsDefaultTextureSwizzle(WMTTextureSwizzleChannels swizzle) {
+-  return swizzle.r == WMTTextureSwizzleRed && swizzle.g == WMTTextureSwizzleGreen &&
+-         swizzle.b == WMTTextureSwizzleBlue && swizzle.a == WMTTextureSwizzleAlpha;
+-}
+-
+ TextureView::TextureView(TextureAllocation *allocation, unsigned index, TextureViewDescriptor descriptor) :
+     gpuResourceID(0),
+     allocation(allocation),
+     key(descriptor, index, allocation->descriptor->miplevelCount()) {
+   auto parent = allocation->texture();
+-  auto parent_format = parent ? parent.pixelFormat() : WMTPixelFormatInvalid;
+   auto view_format = descriptor.format;
+-  // Metal has no block-compressed sRGB view of a non-sRGB parent, so a shader
+-  // read of one samples the parent and lets the sampler apply the transfer
+-  // function. A view that covers the whole parent can be the parent itself.
+-  bool compressed_srgb_srv =
+-      !(descriptor.intendedUsage & WMTTextureUsageRenderTarget) &&
+-      IsBlockCompressionFormat(descriptor.format) &&
+-      Is_sRGBVariant(descriptor.format) &&
+-      Forget_sRGB(descriptor.format) == parent_format;
+-  bool full_parent_view =
+-      compressed_srgb_srv &&
+-      descriptor.type == allocation->descriptor->textureType() &&
+-      descriptor.firstMiplevel == 0 &&
+-      descriptor.miplevelCount == allocation->descriptor->miplevelCount() &&
+-      descriptor.firstArraySlice == 0 &&
+-      descriptor.arraySize == allocation->descriptor->arrayLength() &&
+-      IsDefaultTextureSwizzle(descriptor.swizzle);
+-
+-  if (compressed_srgb_srv) {
+-    view_format = parent_format;
+-    if (full_parent_view) {
+-      texture = parent;
+-      gpuResourceID = allocation->gpuResourceID;
+-      return;
+-    }
+-  }
+-
++  // Keep BC sRGB aliases: native M5 Metal supports the requested view.
++  // Returning the linear parent here silently disables hardware sRGB decode.
+   auto view = parent.newTextureView(
+       view_format, descriptor.type, descriptor.firstMiplevel, descriptor.miplevelCount,
+       descriptor.firstArraySlice, descriptor.arraySize, descriptor.swizzle, gpuResourceID

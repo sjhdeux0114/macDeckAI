@@ -14,7 +14,7 @@ struct GameTrial: Codable {
     var status: String
     var created = Date()
 
-    static let supported: Set<String> = ["214830", "1245620"]
+    static let supported: Set<String> = ["1245620"]
     static func root(id: String, disk: LibraryDisk) throws -> URL {
         guard supported.contains(id) else { throw DeckError.message("시험 프로필이 없는 게임입니다.") }
         return disk.root.appendingPathComponent("GameTrials/" + id, isDirectory: true)
@@ -31,7 +31,7 @@ struct GameTrial: Codable {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(self).write(to: file, options: .atomic)
     }
-    static func prepare(game: Game, wine: String, disk: LibraryDisk, candidate: URL?) async throws -> GameTrial {
+    static func prepare(game: Game, wine: String, disk: LibraryDisk) async throws -> GameTrial {
         guard let id = game.steamAppID, supported.contains(id), let location = game.installedLocation else { throw DeckError.message("설치된 Steam 시험 게임을 선택하세요.") }
         if let existing = try load(id: id, disk: disk) { return existing }
         let base = try root(id: id, disk: disk)
@@ -39,13 +39,10 @@ struct GameTrial: Codable {
         guard !fileManager.fileExists(atPath: base.path) else { throw DeckError.message("완료되지 않은 시험 폴더가 있습니다. 기존 데이터를 보존하므로 별도 확인이 필요합니다: " + base.path) }
         guard let runtime = DirectX12Support.runtimeRoot(forWine: wine) else { throw DeckError.message("복제할 Wine 런타임을 찾지 못했습니다.") }
         let source = URL(fileURLWithPath: location, isDirectory: true)
-        let gameFolder = id == "1245620" ? source.appendingPathComponent("Game", isDirectory: true) : source
-        let executableName = id == "214830" ? "HMH.exe" : "eldenring.exe"
+        let gameFolder = source.appendingPathComponent("Game", isDirectory: true)
+        let executableName = "eldenring.exe"
         let original = gameFolder.appendingPathComponent(executableName)
         guard fileManager.fileExists(atPath: original.path) else { throw DeckError.message("원본 게임 실행 파일을 찾지 못했습니다: " + original.path) }
-        if id == "214830" {
-            guard let candidate, fileManager.fileExists(atPath: candidate.path) else { throw DeckError.message("검증할 D9VK 후보 DLL을 먼저 지정하세요.") }
-        }
         try fileManager.createDirectory(at: base, withIntermediateDirectories: true)
         // APFS clones have independent write semantics, sharing unchanged blocks.
         // No hard links, Steam account/config copying, or game installation copying.
@@ -66,14 +63,9 @@ struct GameTrial: Codable {
             if name == executableName { try fileManager.copyItem(at: item, to: destination) }
             else { try fileManager.createSymbolicLink(at: destination, withDestinationURL: item) }
         }
-        var digest: String?
-        if id == "214830", let candidate {
-            try fileManager.copyItem(at: candidate, to: stage.appendingPathComponent("d3d9.dll"))
-            digest = try sha(candidate)
-        }
         let value = GameTrial(steamAppID: id, name: game.name, sourceGame: location, executable: executableName,
-            executableSHA256: try sha(original), runtimeSource: runtime.path, candidateSHA256: digest,
-            backend: id == "214830" ? "D9VK-MoltenVK-Metal" : "D3DMetal-required", status: "prepared-needs-steam-install")
+            executableSHA256: try sha(original), runtimeSource: runtime.path, candidateSHA256: nil,
+            backend: "D3DMetal-required", status: "prepared-needs-steam-install")
         try value.save(disk: disk)
         return value
     }
@@ -92,13 +84,13 @@ struct GameTrial: Codable {
             try bytes.write(to: destination, options: .atomic)
         }
         var installer = Game(name: "게임 전용 Steam 설치", path: destination.path, kind: .windows)
-        installer.graphicsBackend = steamAppID == "1245620" ? .d3d12 : .dxmt
+        installer.graphicsBackend = .d3d12
         installer.prefix = SteamClient(disk: trialDisk).prefix.path; installer.arguments = ["/S"]
         try trialDisk.preparePrefix(for: installer)
         var plan = try LaunchPlan.make(game: installer, wine: wine.path, disk: trialDisk)
-        plan.environment["WINEMSYNC"] = steamAppID == "214830" ? "0" : "1"
+        plan.environment["WINEMSYNC"] = "1"
         plan.environment["WINEESYNC"] = "0"
-        plan.environment["WINE_LARGE_ADDRESS_AWARE"] = steamAppID == "214830" ? "0" : "1"
+        plan.environment["WINE_LARGE_ADDRESS_AWARE"] = "1"
         if backend == "Apple-D3DMetal" {
             plan.environment["WINEDLLOVERRIDES"] = Self.nativeAppleOverrides(plan.environment["WINEDLLOVERRIDES"] ?? "")
             plan.environment["DYLD_FALLBACK_LIBRARY_PATH", default: ""] += ":" + base.appendingPathComponent("Runtime/lib/external").path
@@ -123,8 +115,7 @@ struct GameTrial: Codable {
         game.runtimePath = base.appendingPathComponent("Runtime/bin/wine").path
         game.trialAppID = steamAppID
         game.arguments = []
-        game.graphicsBackend = steamAppID == "214830" ? .dxmt : .d3d12
-        game.d3d9Mode = steamAppID == "214830" ? .native : .builtin
+        game.graphicsBackend = .d3d12
         return game
     }
     func steamGame(disk: LibraryDisk) throws -> Game {
@@ -134,7 +125,7 @@ struct GameTrial: Codable {
         steam.arguments = ["-no-cef-sandbox", "-cef-disable-gpu"]
         steam.runtimePath = base.appendingPathComponent("Runtime/bin/wine").path
         steam.trialAppID = steamAppID
-        steam.graphicsBackend = steamAppID == "214830" ? .dxmt : .d3d12
+        steam.graphicsBackend = .d3d12
         return steam
     }
 
@@ -150,7 +141,7 @@ struct GameTrial: Codable {
         environment["WINEMSYNC"] = "0"
         environment.removeValue(forKey: "WINEMSYNC_QLIMIT")
         environment["WINEESYNC"] = "0"
-        environment["WINE_LARGE_ADDRESS_AWARE"] = id == "214830" ? "0" : "1"
+        environment["WINE_LARGE_ADDRESS_AWARE"] = "1"
         if id == "1245620", try load(id: id, disk: disk)?.backend == "Apple-D3DMetal" {
             environment["WINEMSYNC"] = "1"
             environment["WINEMSYNC_QLIMIT"] = "512"
@@ -255,9 +246,6 @@ enum GameTrialCLI {
         let isSteam = arguments.contains("--trial-steam"), flag = isSteam ? "--trial-steam" : "--trial-run"
         guard let index = arguments.firstIndex(of: flag), arguments.indices.contains(index + 1) else { throw DeckError.message("Steam App ID가 필요합니다.") }
         let id = arguments[index + 1], disk = LibraryDisk.standard
-        if arguments.contains("--trial-no-vsync") {
-            throw DeckError.message("이 시험 설정은 용사30 vkQueueSubmit 크래시 보고로 중단했습니다. 기본 설정을 사용하세요.")
-        }
         if arguments.contains("--trial-esync") {
             throw DeckError.message("ESync 시험은 Wine 서비스 CPU 과점유로 중단했습니다. 기본 서버 대기 설정을 사용하세요.")
         }

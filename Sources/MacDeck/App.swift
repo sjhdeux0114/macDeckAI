@@ -9,12 +9,25 @@ private let deckBackground = Color(red: 0.055, green: 0.065, blue: 0.08)
 @main
 struct Entry {
     static func main() {
+        if let index = CommandLine.arguments.firstIndex(of: "--prepare-epic-renderers"), CommandLine.arguments.indices.contains(index + 1) {
+            Task {
+                do {
+                    let disk = LibraryDisk.standard
+                    let wine = try disk.load().winePath
+                    try await EpicRendererSupport(disk: disk).prepare(wine: wine, routers: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+                    print("PASS Epic-only renderer preparation; gameplay unverified"); exit(0)
+                } catch { fputs("FAIL: \(error)\n", stderr); exit(1) }
+            }
+            dispatchMain()
+        }
         if CommandLine.arguments.contains("--dependencies-plan") || CommandLine.arguments.contains("--dependencies-install") {
             Task {
                 do {
                     let disk = LibraryDisk.standard, library = try disk.load()
-                    let games = library.games.filter { $0.steamAppID != nil && $0.trialAppID == nil }
-                    var needs = try DependencyDiscovery.plan(games: games, profiles: GameProfileStore(disk: disk).load().games)
+                    let epic = CommandLine.arguments.contains("--epic")
+                    let games = epic ? try EpicClient(disk: disk).installedGames() : library.games.filter { $0.steamAppID != nil && $0.trialAppID == nil }
+                    let profiles = try GameProfileStore(disk: disk).load().games
+                    var needs = try (epic ? DependencyDiscovery.epicPlan(games: games, profiles: profiles) : DependencyDiscovery.plan(games: games, profiles: profiles))
                     if let i = CommandLine.arguments.firstIndex(of: "--package"), CommandLine.arguments.indices.contains(i+1) {
                         let id = CommandLine.arguments[i+1]
                         guard DependencyCatalog.package(id) != nil else { throw DeckError.message("지원하지 않는 패키지입니다.") }
@@ -23,7 +36,7 @@ struct Entry {
                     if CommandLine.arguments.contains("--dependencies-plan") {
                         print(String(decoding: try JSONEncoder().encode(needs), as: UTF8.self)); exit(0)
                     }
-                    var prefix = SteamClient(disk: disk).prefix
+                    var prefix = epic ? EpicClient(disk: disk).prefix : SteamClient(disk: disk).prefix
                     if let i = CommandLine.arguments.firstIndex(of: "--prefix"), CommandLine.arguments.indices.contains(i+1) { prefix = URL(fileURLWithPath: CommandLine.arguments[i+1]) }
                     let wine = library.winePath.isEmpty ? Runtime.bundledWine : library.winePath
                     guard let wine else { throw DeckError.message("Wine이 없습니다.") }
@@ -62,9 +75,7 @@ struct Entry {
                 do {
                     let disk = LibraryDisk.standard
                     guard let game = try disk.load().games.first(where: { $0.steamAppID == id }), let wine = Runtime.bundledWine else { throw DeckError.message("시험 게임 또는 Wine이 없습니다.") }
-                    var candidate: URL?
-                    if let index = CommandLine.arguments.firstIndex(of: "--candidate"), CommandLine.arguments.indices.contains(index + 1) { candidate = URL(fileURLWithPath: CommandLine.arguments[index + 1]) }
-                    var prepared = try await GameTrial.prepare(game: game, wine: wine, disk: disk, candidate: candidate)
+                    var prepared = try await GameTrial.prepare(game: game, wine: wine, disk: disk)
                     if let index = CommandLine.arguments.firstIndex(of: "--apple-image"), CommandLine.arguments.indices.contains(index + 1) {
                         let image = URL(fileURLWithPath: CommandLine.arguments[index + 1])
                         prepared = try prepared.importApple(redist: image.appendingPathComponent("redist"), license: image.appendingPathComponent("License.rtf"), disk: disk)
@@ -191,12 +202,7 @@ struct GameEditor: View {
                         Text(backend.label).tag(GraphicsBackend?.some(backend))
                     }
                 }
-                Picker("Direct3D 9 렌더러 (고전 게임)", selection: Binding(get: { game.d3d9Mode ?? .automatic }, set: { game.d3d9Mode = $0 })) {
-                    ForEach(D3D9Mode.allCases, id: \.self) { mode in
-                        Text(mode.label).tag(mode)
-                    }
-                }
-                Text(game.d3d9Mode == .native ? "Native D9VK 선택 시 게임 폴더의 d3d9.dll을 로드하여 Metal GPU로 가속합니다." : "자동/WineD3D 선택 시 내장 WineD3D Vulkan Metal 가속 및 2GB VRAM 캡이 적용됩니다.").font(.caption).foregroundStyle(.secondary)
+                Text("Direct3D 9 게임은 검증된 내장 경로를 사용하며, 폐기된 D9VK 모드는 제공하지 않습니다.").font(.caption).foregroundStyle(.secondary)
                 TextField("Windows 환경 폴더 · 비워두면 게임별 자동 생성", text: Binding(get: { game.prefix ?? "" }, set: { game.prefix = $0.isEmpty ? nil : $0 }))
             }
             Text("인수 예: [\"-windowed\", \"-width\", \"1280\"]. 쉘 명령은 실행하지 않습니다.").font(.caption).foregroundStyle(.secondary)

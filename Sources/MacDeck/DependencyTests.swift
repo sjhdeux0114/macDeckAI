@@ -4,6 +4,7 @@ enum DependencyTests {
     static func run(root: URL, check: (Bool, String) throws -> Void) throws {
         try check(["vc2005-x86","vc2005-x64","vc2008-x86","vc2008-x64"].allSatisfy { DependencyCatalog.package($0)?.arguments == ["/q"] } && DependencyCatalog.package("vc2010-x86")?.arguments == ["/q","/norestart"], "legacy VC2005/2008 wrappers use their supported quiet syntax without changing newer installer options")
         try check(DependencyCatalog.package("dotnet40")?.arguments == ["/q","/c:install.exe /q"], ".NET4 full bootstrapper passes the quiet option to its inner installer")
+        try check(DependencyCatalog.package("vc2022-x86")?.requiredSystemDLLs == ["msvcp140.dll", "vcruntime140.dll"] && DependencyCatalog.package("vc2022-x64")?.requiredSystemDLLs.contains("vcruntime140_1.dll") == true, "VC14 x86 never requires the x64-only vcruntime140_1 payload")
         try check(DependencyDiscovery.packageID(path: "%INSTALLDIR%\\redist\\vcredist_x86.exe", hint: "Microsoft VC Redist Package 2005") == "vc2005-x86", "dependency VDF resolves the exact VC2005 architecture without executing its command")
         try check(DependencyDiscovery.packageID(path: "_CommonRedist/vcredist/2015/vc_redist.x64.exe", hint: "") == "vc2022-x64", "VC2015-2022 uses its compatible catalog family and preserves x64")
         try check(DependencyDiscovery.packageID(path: "vcredist_x86.exe", hint: "") == nil && DependencyDiscovery.packageID(path: "cmd.exe", hint: "vcredist 2005") == nil, "ambiguous packages and arbitrary installer commands are not executable requirements")
@@ -20,6 +21,19 @@ enum DependencyTests {
         let plan = try DependencyDiscovery.plan(games: [a,b], profiles: [pa,pb])
         try check(plan.contains(DependencyNeed(packageID: "dotnet48", appIDs: ["1245620","220440"])) && !plan.contains { $0.packageID == "dotnet40" }, ".NET4 in-place families coalesce to the highest requested version and preserve source App IDs")
         try check(try DependencyDiscovery.requirements(game: a, profile: nil) == ["vc2010-x86"], "game installscript arguments never become installer arguments")
+        var epicGame = a; epicGame.steamAppID = nil; epicGame.epicAppID = "exact-epic-fixture"
+        var epicProfile = pa; epicProfile.id = "epic:exact-epic-fixture"; epicProfile.requiredRuntimes = ["vc2022-x64"]
+        let epicPlan = try DependencyDiscovery.plan(games: [epicGame], profiles: [epicProfile, pa])
+        try check(epicPlan.contains(DependencyNeed(packageID: "vc2022-x64", appIDs: ["epic:exact-epic-fixture"])) && epicPlan.contains(DependencyNeed(packageID: "vc2010-x86", appIDs: ["epic:exact-epic-fixture"])) && !epicPlan.contains { $0.packageID == "dotnet40" }, "Epic dependency discovery keeps exact Epic identity and cannot inherit a Steam profile")
+        var unrelatedEpic = epicGame; unrelatedEpic.epicAppID = "another-epic-id"
+        try check(try !DependencyDiscovery.plan(games: [unrelatedEpic], profiles: [epicProfile]).contains { $0.packageID == "vc2022-x64" }, "Epic runtime requirements do not leak to another Epic App ID")
+        let emptyEpicPlan = try DependencyDiscovery.epicPlan(games: [], profiles: [])
+        try check(emptyEpicPlan.count == 12 && emptyEpicPlan.allSatisfy { DependencyCatalog.package($0.packageID)?.isCLR == false && $0.appIDs == ["epic:runtime-baseline-v1"] }, "Epic prepares all twelve side-by-side VC packages before any game is installed without blanket .NET upgrades")
+        let fullEpicPlan = try DependencyDiscovery.epicPlan(games: [epicGame], profiles: [epicProfile])
+        try check(fullEpicPlan.first { $0.packageID == "vc2022-x64" }?.appIDs == ["epic:exact-epic-fixture", "epic:runtime-baseline-v1"] && Set(fullEpicPlan.map(\.packageID)).count == fullEpicPlan.count, "Epic baseline preserves exact-game provenance and deduplicates discovered requirements")
+        epicProfile.requiredRuntimes = ["dotnet40"]
+        let epicCLR = try DependencyDiscovery.epicPlan(games: [epicGame], profiles: [epicProfile])
+        try check(epicCLR.first { $0.packageID == "dotnet40" }?.appIDs == ["epic:exact-epic-fixture"], "Epic installs .NET only for the exact game that needs it")
         let prefix = root.appendingPathComponent("PolicyPrefix")
         var env = ["WINEDLLOVERRIDES":"mscoree,mshtml=;d3d11,dxgi=b", "WINEMSYNC":"1"]
         let original = env
@@ -31,6 +45,15 @@ enum DependencyTests {
         try DependencyInstaller.applyCLRPolicy(prefix: prefix, environment: &env)
         try check(env == ["WINEDLLOVERRIDES":"mshtml=;d3d11,dxgi=b", "WINEMSYNC":"1"], "CLR activation removes only the veto and preserves graphics and synchronization settings")
         let bad = root.appendingPathComponent("not-a-native.dll")
+        var cab = Data(repeating: 0, count: 40)
+        cab.replaceSubrange(0..<4, with: [77,83,67,70]); cab[8] = 40; cab[16] = 36; cab[24] = 3; cab[25] = 1; cab[26] = 1
+        try check(DependencyPayload.cabinets(Data([1,2,3]) + cab).count == 1 && DependencyPayload.cabinets(cab.dropLast()).isEmpty, "pinned CAB parser finds embedded cabinets and rejects truncated payloads")
+        var malformed = cab; malformed[16] = 60
+        try check(DependencyPayload.cabinets(malformed).isEmpty, "CAB parser rejects out-of-bounds file tables")
+        let vc13 = DependencyCatalog.package("vc2013-x64")!
+        try check(DependencyPayload.candidate("F_CENTRAL_msvcr120_x64", dll: "msvcr120.dll", package: vc13) && !DependencyPayload.candidate("F_CENTRAL_msvcr120_x86", dll: "msvcr120.dll", package: vc13) && !DependencyPayload.candidate("F_CENTRAL_msvcr110_x64", dll: "msvcr120.dll", package: vc13), "native fallback matches exact package version and architecture")
+        try Data("user supplied DLL".utf8).write(to: bad)
+        try check(!DependencyPayload.replaceable(bad), "native repair preserves unknown non-Wine DLLs")
         try Data([0x4d,0x5a] + Array(repeating: UInt8(0), count: 510)).write(to: bad)
         try check(!DependencyInstaller.nativePE(bad), "an MZ placeholder cannot satisfy runtime installation detection")
         try check(Set(DependencyCatalog.packages.map(\.id)).count == DependencyCatalog.packages.count && DependencyCatalog.packages.allSatisfy { $0.sha256.count == 64 && $0.url.hasPrefix("https://") }, "redistributable catalog has unique IDs and HTTPS SHA256 pins")

@@ -37,9 +37,13 @@ struct SteamStorage {
 
     func autoConnectAll(_ storages: [ExternalLibrary], steamRunning: Bool) -> [ExternalLibrary] {
         guard !storages.isEmpty else { return storages }
+        let epicPrefix = client.disk.bottles.appendingPathComponent("EpicGames", isDirectory: true)
         return storages.map { item in
             guard item.connected else { return item.nonRootMapping }
             let migrated = (try? migrateMapping(item)) ?? item.nonRootMapping
+            if FileManager.default.fileExists(atPath: epicPrefix.path) {
+                try? migrated.syncTo(prefix: epicPrefix)
+            }
             if !steamRunning && !registered(migrated) {
                 try? update(migrated, removing: false, steamRunning: false)
             }
@@ -205,6 +209,8 @@ struct SteamStorage {
             guard destination == storage.mappingRoot.path else { throw DeckError.message("드라이브 매핑이 변경되어 해제를 중단했습니다.") }
             try FileManager.default.removeItem(at: link)
         }
+        let epicPrefix = client.disk.bottles.appendingPathComponent("EpicGames", isDirectory: true)
+        storage.unlinkFrom(prefix: epicPrefix)
         // Game content is retained. The marker is intentionally kept for recovery.
     }
 }

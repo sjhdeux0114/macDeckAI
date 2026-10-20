@@ -177,16 +177,16 @@ Adapter: Apple M5
 PASS DXT5 static/dynamic texture creation and upload
 PARTIAL DEPTH center=3400,3800,3a00,3c00
 PASS partial depth clear followed by SM3 depth test
-QUERY type=8 flags=0 hr=00000000 elapsed_ms=1 result=1
-QUERY type=8 flags=1 hr=00000000 elapsed_ms=1 result=1
-QUERY type=9 flags=0 hr=00000000 elapsed_ms=2 result=0
-QUERY type=9 flags=1 hr=00000000 elapsed_ms=1 result=0
+QUERY type=8 flags=0 hr=00000000 elapsed_ms=0 result=1
+QUERY type=8 flags=1 hr=00000000 elapsed_ms=2 result=1
+QUERY type=9 flags=0 hr=00000000 elapsed_ms=1 result=0
+QUERY type=9 flags=1 hr=00000000 elapsed_ms=2 result=0
 PASS D3D9 GPU clear/readback, full and partial rectangle Present, 1280x720 client
-2026-10-19 12:15:51.055 wine[24262:15271741] [libMTLHud] Metric com.apple.hud-stat.frame-interval already exist
-2026-10-19 12:15:51.055 wine[24262:15271741] [libMTLHud] Metric com.apple.hud-stat.present-delay already exist
-2026-10-19 12:15:51.055 wine[24262:15271741] [libMTLHud] Metric com.apple.hud-stat.fps already exist
-2026-10-19 12:15:51.055 wine[24262:15271446] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7f7b8f385050 Enable HUD, ke='Command-F9', action: toggleEnabled:>, but is only supported for system-provided menu items; will not be used
-2026-10-19 12:15:51.055 wine[24262:15271446] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7f7b8f3859f0 Enable Logging, ke='Command-F8', action: toggleLoggingEnabled:>, but is only supported for system-provided menu items; will not be used
-2026-10-19 12:15:51.055 wine[24262:15271446] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7f7b8f387720 Reset Metrics, ke='Command-F11', action: resetMetrics:>, but is only supported for system-provided menu items; will not be used
-2026-10-19 12:15:51.056 wine[24262:15271446] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7f7b8f387e90 Show Configuration Panel, ke='Command-F12', action: showConfigurationPanel:>, but is only supported for system-provided menu items; will not be used
-2026-10-19 12:15:51.056 wine[24262:15271446] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7f7b8f3889a0 Copy HUD Configuration, action: copyConfig:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 20:34:38.667 wine[30459:15347187] [libMTLHud] Metric com.apple.hud-stat.frame-interval already exist
+2026-10-19 20:34:38.667 wine[30459:15347187] [libMTLHud] Metric com.apple.hud-stat.present-delay already exist
+2026-10-19 20:34:38.667 wine[30459:15347187] [libMTLHud] Metric com.apple.hud-stat.fps already exist
+2026-10-19 20:34:38.668 wine[30459:15346856] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7ff403f13bf0 Enable HUD, ke='Command-F9', action: toggleEnabled:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 20:34:38.668 wine[30459:15346856] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7ff403f31120 Enable Logging, ke='Command-F8', action: toggleLoggingEnabled:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 20:34:38.668 wine[30459:15346856] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7ff403f2e040 Reset Metrics, ke='Command-F11', action: resetMetrics:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 20:34:38.668 wine[30459:15346856] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7ff403f1b520 Show Configuration Panel, ke='Command-F12', action: showConfigurationPanel:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 20:34:38.668 wine[30459:15346856] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7ff403f1b640 Copy HUD Configuration, action: copyConfig:>, but is only supported for system-provided menu items; will not be used

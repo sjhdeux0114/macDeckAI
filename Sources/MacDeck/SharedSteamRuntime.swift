@@ -51,7 +51,14 @@ struct SharedSteamRuntime {
         }
         content += "[patches]\r\n"
         if try GameProfileStore(disk: disk).load().games.contains(where: { $0.id == "steam:601150" && $0.steamRenderer == .dxmt && $0.dxmtMarshalFix == true }) { content += "601150=gs-ts-v1\r\n" }
-        if let dmc = try GameProfileStore(disk: disk).load().games.first(where: { $0.id == "steam:220440" && $0.dmcMetalFix == true }) { content += "220440=" + (dmc.dmcClearFix == true ? "dxmt-clear-v2" : "dxmt-v1") + "\r\n" }
+        if let dmc = try GameProfileStore(disk: disk).load().games.first(where: { $0.id == "steam:220440" && $0.dmcMetalFix == true }) { content += "220440=" + (dmc.dmcQueryYieldFix == true ? "dxmt-smooth-v5" : (dmc.dmcSrgbFix == true ? "dxmt-srgb-v4" : (dmc.dmcClearFix == true ? "dxmt-bind-v3" : "dxmt-v1"))) + "\r\n" }
+        if let hmh = try GameProfileStore(disk: disk).load().games.first(where: { $0.id == "steam:214830" && $0.hmhMetalFix == true }) { content += "214830=" + (hmh.hmhClearFix == true ? "dxmt-clear-v2" : "dxmt-v1") + "\r\n" }
+        content += "[yield]\r\n"
+        for profile in try GameProfileStore(disk: disk).load().games where profile.id.hasPrefix("steam:") && !profile.id.hasSuffix(":trial") {
+            let id = String(profile.id.dropFirst(6))
+            guard id.allSatisfy({ $0.isNumber }), profile.d3d9YieldFix == true else { continue }
+            content += id + "=true\r\n"
+        }
         var bytes = Data([0xff, 0xfe]); bytes.append(content.data(using: .utf16LittleEndian)!)
         try bytes.write(to: root.appendingPathComponent("renderers.ini"), options: .atomic)
     }
@@ -72,23 +79,40 @@ struct SharedSteamRuntime {
         guard SteamRenderer(rawValue: result) != nil else { throw DeckError.message("Steam 렌더러 맵의 선택값을 확인하세요.") }
         return result
     }
-    static func dmcMetalEnabled(prefix: URL) throws -> Bool {
-        let text = try String(contentsOf: prefix.appendingPathComponent("drive_c/ProgramData/MacDeck/renderers.ini"), encoding: .utf16)
-        var patches = false
-        for line in text.components(separatedBy: .newlines) {
-            let line = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if line.hasPrefix("[") { patches = line.lowercased() == "[patches]" }
-            else if patches && ["220440=dxmt-v1", "220440=dxmt-clear-v2"].contains(line) { return true }
-        }
-        return false
-    }
-    static func dmcClearEnabled(prefix: URL) throws -> Bool {
+    static func dmcMetalPatch(prefix: URL) throws -> String? {
         let text = try String(contentsOf: prefix.appendingPathComponent("drive_c/ProgramData/MacDeck/renderers.ini"), encoding: .utf16)
         var patches = false
         for raw in text.components(separatedBy: .newlines) {
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             if line.hasPrefix("[") { patches = line.lowercased() == "[patches]" }
-            else if patches && line == "220440=dxmt-clear-v2" { return true }
+            else if patches && ["220440=dxmt-v1", "220440=dxmt-clear-v2", "220440=dxmt-bind-v3", "220440=dxmt-srgb-v4", "220440=dxmt-smooth-v5"].contains(line) { return String(line.dropFirst(7)) }
+        }
+        return nil
+    }
+    static func dmcMetalEnabled(prefix: URL) throws -> Bool { try dmcMetalPatch(prefix: prefix) != nil }
+    static func hmhMetalPatch(prefix: URL) throws -> String? {
+        let text = try String(contentsOf: prefix.appendingPathComponent("drive_c/ProgramData/MacDeck/renderers.ini"), encoding: .utf16)
+        var patches = false
+        for raw in text.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.hasPrefix("[") { patches = line.lowercased() == "[patches]" }
+            else if patches && ["214830=dxmt-v1", "214830=dxmt-clear-v2"].contains(line) { return String(line.dropFirst(7)) }
+        }
+        return nil
+    }
+    static func hmhMetalEnabled(prefix: URL) throws -> Bool { try hmhMetalPatch(prefix: prefix) != nil }
+    static func dmcClearEnabled(prefix: URL) throws -> Bool {
+        try ["dxmt-clear-v2", "dxmt-bind-v3", "dxmt-srgb-v4", "dxmt-smooth-v5"].contains(dmcMetalPatch(prefix: prefix) ?? "")
+    }
+    static func d3d9YieldEnabled(prefix: URL, appID: String) throws -> Bool {
+        let file = prefix.appendingPathComponent("drive_c/ProgramData/MacDeck/renderers.ini")
+        guard FileManager.default.fileExists(atPath: file.path) else { return false }
+        let text = try String(contentsOf: file, encoding: .utf16)
+        var yieldSection = false
+        for raw in text.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.hasPrefix("[") { yieldSection = line.lowercased() == "[yield]" }
+            else if yieldSection && line == "\(appID)=true" { return true }
         }
         return false
     }

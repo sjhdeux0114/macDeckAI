@@ -108,8 +108,8 @@ struct ConsoleView: View {
     @DeckState private var quitRequested = false
     @DeckState private var history: [SessionDiagnostics.Entry] = []
     @FocusState private var searching: Bool
-    private let pages = ["library", "steam", "storage", "runtime", "controllers", "diagnostics", "compatibility"]
-    private let titles = ["라이브러리", "Steam", "저장 공간", "실행 환경", "게임패드", "실행 기록", "호환성 DB"]
+    private let pages = ["library", "steam", "epic", "storage", "runtime", "controllers", "diagnostics", "compatibility"]
+    private let titles = ["라이브러리", "Steam", "Epic Games", "저장 공간", "실행 환경", "게임패드", "실행 기록", "호환성 DB"]
     private var page: String { pages.contains(model.page) ? model.page : "library" }
     private var detail: Game? { model.library.games.first { $0.id == detailID } }
     private var columns: Int { 3 }
@@ -227,6 +227,7 @@ struct ConsoleView: View {
         switch page {
         case "library": return "\(model.filtered.count)개의 게임 · \(model.graphicsBackend.shortLabel) → Metal"
         case "steam": return "Steam에 로그인하고 Big Picture에서 게임을 설치하세요."
+        case "epic": return "Epic Games에 로그인하고 런처에서 게임을 설치하세요."
         case "storage": return "외장 SSD와 HDD에 게임을 보관하세요."
         case "runtime": return "그래픽 모드 · 업데이트 · 성능 표시"
         case "controllers": return "연결 상태와 실시간 입력을 확인하세요."
@@ -238,6 +239,7 @@ struct ConsoleView: View {
     private var status: String {
         switch page {
         case "steam", "storage": return model.steamProgress
+        case "epic": return model.epicProgress
         case "runtime": return model.updateBannerMessage
         default: return ""
         }
@@ -411,7 +413,7 @@ struct ConsoleView: View {
                 handle(.back)
                 checkUI(detail == nil, "back restores library")
             }
-            for target in ["steam", "storage", "runtime", "controllers", "diagnostics", "compatibility"] {
+            for target in ["steam", "epic", "storage", "runtime", "controllers", "diagnostics", "compatibility"] {
                 switchPage(target)
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 capture(target)
@@ -421,7 +423,7 @@ struct ConsoleView: View {
             }
             handle(.steam)
             checkUI(page == "steam", "Menu navigates without launching Steam")
-            let result = uiFailures.isEmpty ? "PASS: console navigation, details, seven pages, Xbox/PlayStation hints, report sheet and snapshots" : "FAIL: " + uiFailures.joined(separator: "; ")
+            let result = uiFailures.isEmpty ? "PASS: console navigation, details, eight pages, Xbox/PlayStation hints, report sheet and snapshots" : "FAIL: " + uiFailures.joined(separator: "; ")
             print(result); fflush(stdout)
             try? Data((result + "\n").utf8).write(to: evidenceFolder.appendingPathComponent("console-ui-result.log"))
             switchPage("library")
@@ -476,10 +478,6 @@ struct ConsoleView: View {
                 action("play", "플레이", game.name, "play.fill", run: { model.launch(game) }),
                 action("edit", "이름 · 실행 인수", "키보드로 편집 · 게임별 실행 옵션", "slider.horizontal.3", run: { editing = game }),
                 action("steam-renderer", "Steam 게임 렌더러", model.gameProfile(game)?.steamRenderer?.label ?? "통합 모드 기본값 · Apple 비교", "cube.transparent", enabled: game.steamAppID != nil && model.library.sharedSteamRenderer == true, run: { model.cycleSteamRenderer(game) }),
-                action("dx9", "Direct3D 9", (game.d3d9Mode ?? .automatic).label, "cube", run: {
-                    var changed = game; let modes = D3D9Mode.allCases; let index = modes.firstIndex(of: game.d3d9Mode ?? .automatic) ?? 0
-                    changed.d3d9Mode = modes[(index + 1) % modes.count]; model.saveGame(changed)
-                }),
                 action("compatibility", "호환성 점검", "엔진 · 그래픽 API · 충돌 후보 확인", "checkmark.shield", run: { model.inspectCompatibility(game) }),
                 action("log", "실행 로그", "최근 실행의 GPU · 오류 기록", "doc.text.magnifyingglass", run: { model.showLog(game) }),
                 action("report", "오류 신고 메일", "ZIP + App ID · " + SupportReports.recipient, "envelope", enabled: !model.preparingSupportReport, run: { reporting = game }),
@@ -503,6 +501,14 @@ struct ConsoleView: View {
                 action("refresh", "설치 게임 새로 고침", "설치된 Steam 게임을 MacDeck에 표시", "arrow.clockwise", enabled: model.steamInstalled, run: { model.refreshSteamGames() }),
                 action("autostart", "Steam 자동 시작", (model.library.startSteamOnLaunch ?? true) ? "켬 · MacDeck을 열 때 한 번 실행" : "끔 · 직접 실행", "power", run: { model.setSteamAutostart(!(model.library.startSteamOnLaunch ?? true)) }),
                 action("gpu", "Steam GPU 가속", (model.library.steamGPUAcceleration ?? false) ? "켬 · 변경 후 Steam 다시 실행" : "끔 · 변경 후 Steam 다시 실행", "sparkles", run: { model.setSteamGPUAcceleration(!(model.library.steamGPUAcceleration ?? false)) }),
+                action("storage", "게임 설치 폴더", "외장 드라이브 연결 · 해제", "externaldrive", run: { switchPage("storage") })
+            ]
+        case "epic":
+            return [
+                action("epic", model.epicInstalled ? "Epic Games Launcher 열기" : "Epic Games Launcher 설치", "로그인 · 스토어 · 게임 다운로드", "play.rectangle.fill", enabled: !model.downloadingEpic, run: model.launchEpic),
+                action("epic-runtimes", "필수 런타임 다시 준비", "VC++ 2005–2022 x86/x64 · 게임별 .NET 자동 확인", "shippingbox", enabled: model.epicInstalled && !model.preparingDependencies, run: model.prepareEpicRuntimes),
+                action("eos", model.epicEOSInstalled ? "Epic Online Services 정상" : "Epic Online Services 설치", model.epicEOSInstalled ? "멀티플레이 · 친구 · 오버레이 준비 완료" : "런처 및 게임 온라인 서비스 필수 구성요소", model.epicEOSInstalled ? "checkmark.shield.fill" : "network", enabled: model.epicInstalled, run: model.installEpicOnlineServices),
+                action("refresh-epic", "설치 게임 새로 고침", "외장하드 및 PC에 설치된 Epic 게임을 MacDeck에 표시", "arrow.clockwise", enabled: model.epicInstalled, run: { model.refreshEpicGames() }),
                 action("storage", "게임 설치 폴더", "외장 드라이브 연결 · 해제", "externaldrive", run: { switchPage("storage") })
             ]
         case "storage":

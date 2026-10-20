@@ -4,10 +4,11 @@ from pathlib import Path
 import subprocess, re, argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--apple-components", type=Path, help="Directory with macdeck_metal_*.dll aliases from the verified Apple runtime")
+parser.add_argument("--epic-only", action="store_true", help="Build isolated Epic exact-executable-path routers")
 args = parser.parse_args()
 root=Path(__file__).resolve().parent.parent
 compiler=root/'.cache/llvm-mingw/llvm-mingw-20261006-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang++'
-out=root/'.build/common-router';out.mkdir(parents=True,exist_ok=True)
+out=root/('.build/epic-router' if args.epic_only else '.build/common-router');out.mkdir(parents=True,exist_ok=True)
 exports={
  'dxgi':[(9,'CreateDXGIFactory'),(10,'CreateDXGIFactory1'),(11,'CreateDXGIFactory2'),(12,None),(13,None),(14,None),(15,None),(16,None),(17,'DXGIGetDebugInterface1'),(18,'DXGIDeclareAdapterRemovalSupport')],
  'd3d12':[(100,'GetBehaviorValue'),(101,'D3D12CreateDevice'),(102,'D3D12GetDebugInterface'),(103,'D3D12CoreCreateLayeredDevice'),(104,'D3D12CoreGetLayeredDeviceSize'),(105,'D3D12CoreRegisterLayers'),(106,'D3D12CreateRootSignatureDeserializer'),(107,'D3D12CreateVersionedRootSignatureDeserializer'),(108,'D3D12EnableExperimentalFeatures'),(109,'D3D12GetInterface'),(110,'D3D12SerializeRootSignature'),(111,'D3D12SerializeVersionedRootSignature')]
@@ -36,5 +37,5 @@ for module,items in exports.items():
   asm.extend(['addq $168,%rsp',f'ready_{label}:',f'jmp *cache_{label}(%rip)','.seh_endproc'])
   data.extend(['.data','.p2align 3',f'cache_{label}: .quad 0',f'name_{label}: .asciz "{name or ""}"'])
  (out/f'{module}.S').write_text('\n'.join(asm+data)+'\n');(out/f'{module}.def').write_text('\n'.join(definitions)+'\n')
- subprocess.run([str(compiler),'-O2','-shared','-static','-static-libgcc','-static-libstdc++',f'-DROUTER_MODULE=L"{module}"',str(root/'scripts/common-renderer-router.cpp'),str(out/f'{module}.S'),str(out/f'{module}.def'),'-o',str(out/f'{module}.dll')],check=True)
+ subprocess.run([str(compiler),'-O2','-shared','-static','-static-libgcc','-static-libstdc++']+(['-DROUTER_EPIC_ONLY'] if args.epic_only else [])+[f'-DROUTER_MODULE=L"{module}"',str(root/'scripts/common-renderer-router.cpp'),str(out/f'{module}.S'),str(out/f'{module}.def'),'-o',str(out/f'{module}.dll')],check=True)
  print('BUILT',module)

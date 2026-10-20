@@ -88,3 +88,40 @@ was disabled. Production binaries were not replaced with the Clear candidate.
 Backup of the exact-game DB notes/map cleanup:
 `Compatibility/Repairs/dmc-clear-investigation-20261019/restore.json`
 under the user's MacDeck application-support directory.
+
+## 2026-10-19 - Native binding correction v3 (supersedes FFP Clear trial)
+
+Confirmed source mismatch in the exact release:
+[D3D9 Clear writes slot0](https://github.com/dacevedo12/dxmt/blob/e8dd4c656dcb74a6d970a30a397d1558b0e3fb2b/src/d3d9/d3d9_clear_quad.cpp#L248),
+while the [Metal Clear shader](https://github.com/dacevedo12/dxmt/blob/e8dd4c656dcb74a6d970a30a397d1558b0e3fb2b/src/dxmt/dxmt_command.metal#L214)
+reads `kCustomBufferArgumentIndex0`, defined as30. The sibling D3D11 Clear
+already uses that symbolic slot. This is the source-level cause of the separately
+reproduced zero color/depth Clear values.
+
+`prepare-dmc-clear-binding.py` changes exactly one PE32 instruction immediate,
+slot0 to30 (file offset22471), in the locked private candidate. It validates input
+SHA, instruction context and output SHA, preserves source/size/other bytes, and
+refuses overwriting even with optimized Python. The source-equivalent patch is
+`patches/dxmt-d3d9-clear-buffer-slot.patch`.
+
+New alias: `macdeck_dmc_dxmt_clear_v3.dll`.
+SHA256: `84a4886fd6ac94d8dff5a680652f52068ccfb4be744aa40468a30b6843126627`.
+`dmcClearFix=true` now emits `220440=dxmt-bind-v3`; this selects the corrected
+native candidate without the experimental FFP/state-block Clear hook. The old
+v2 decoder is retained for explicit old laboratory maps only. Default profiles
+still leave Clear experiments disabled. Candidate fingerprints detect changes.
+
+Validation: isolated depth/color/SM3 GPU probes PASS without the FFP workaround;
+AppIDs0/601150/952060 use original D3D9, only220440 uses the v3 candidate.170 app
+checks PASS. Three patch-identity/refusal checks PASS. Original common D3D11,
+winemetal PE/Unix and all other profile records were preserved during deployment.
+
+Current Mac: exact DmC profile revision8/failing enabled for the user-requested
+trial. Backup before deployment:
+`Compatibility/Repairs/dmc-clear-binding-v3-20261019/restore.json` under MacDeck
+Application Support. Existing normal Steam launched DmC PID30819, with the v3
+DLL and matching private Metal components confirmed loaded. Title renders.
+Game-only automatic input submission succeeded but did not advance the title;
+user was asked to click/Enter and continue. Gameplay color, controls, performance
+and long-session stability have NOT yet been verified for v3. The old v2
+oversaturation result must not be attributed to v3 without this comparison.

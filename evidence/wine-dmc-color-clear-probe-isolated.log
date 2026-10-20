@@ -8,11 +8,11 @@ QUERY type=8 flags=1 hr=00000000 elapsed_ms=1 result=1
 QUERY type=9 flags=0 hr=00000000 elapsed_ms=2 result=0
 QUERY type=9 flags=1 hr=00000000 elapsed_ms=1 result=0
 PASS partial color Clear GPU readback
-2026-10-19 12:15:51.786 wine[24310:15271816] [libMTLHud] Metric com.apple.hud-stat.frame-interval already exist
-2026-10-19 12:15:51.786 wine[24310:15271816] [libMTLHud] Metric com.apple.hud-stat.present-delay already exist
-2026-10-19 12:15:51.786 wine[24310:15271816] [libMTLHud] Metric com.apple.hud-stat.fps already exist
-2026-10-19 12:15:51.790 wine[24310:15271797] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fdede3f8120 Enable HUD, ke='Command-F9', action: toggleEnabled:>, but is only supported for system-provided menu items; will not be used
-2026-10-19 12:15:51.790 wine[24310:15271797] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fdede33f9f0 Enable Logging, ke='Command-F8', action: toggleLoggingEnabled:>, but is only supported for system-provided menu items; will not be used
-2026-10-19 12:15:51.790 wine[24310:15271797] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fdede3fc7b0 Reset Metrics, ke='Command-F11', action: resetMetrics:>, but is only supported for system-provided menu items; will not be used
-2026-10-19 12:15:51.790 wine[24310:15271797] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fdede3fd180 Show Configuration Panel, ke='Command-F12', action: showConfigurationPanel:>, but is only supported for system-provided menu items; will not be used
-2026-10-19 12:15:51.790 wine[24310:15271797] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fdede3fd360 Copy HUD Configuration, action: copyConfig:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 20:34:39.834 wine[30515:15347444] [libMTLHud] Metric com.apple.hud-stat.frame-interval already exist
+2026-10-19 20:34:39.834 wine[30515:15347444] [libMTLHud] Metric com.apple.hud-stat.present-delay already exist
+2026-10-19 20:34:39.834 wine[30515:15347444] [libMTLHud] Metric com.apple.hud-stat.fps already exist
+2026-10-19 20:34:39.835 wine[30515:15347383] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fa57b7206e0 Enable HUD, ke='Command-F9', action: toggleEnabled:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 20:34:39.835 wine[30515:15347383] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fa58b7a52c0 Enable Logging, ke='Command-F8', action: toggleLoggingEnabled:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 20:34:39.835 wine[30515:15347383] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fa58b7bdac0 Reset Metrics, ke='Command-F11', action: resetMetrics:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 20:34:39.835 wine[30515:15347383] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fa58b7be2d0 Show Configuration Panel, ke='Command-F12', action: showConfigurationPanel:>, but is only supported for system-provided menu items; will not be used
+2026-10-19 20:34:39.835 wine[30515:15347383] NSEventModifierFlagFunction specified to -setKeyEquivalentModifierMask: for item <NSMenuItem: 0x7fa58b7cb560 Copy HUD Configuration, action: copyConfig:>, but is only supported for system-provided menu items; will not be used

@@ -26,11 +26,16 @@ struct GameProfile: Codable, Identifiable {
     var experimentalEnabled = false
     var environment: [String: String] = [:]
     var steamRenderer: SteamRenderer? = nil
-    var dmcD9VKFix: Bool? = nil // Retired: retained only to decode old databases.
     var dmcMetalFix: Bool? = nil
     var dmcClearFix: Bool? = nil
+    var dmcSrgbFix: Bool? = nil
+    var dmcQueryYieldFix: Bool? = nil
+    var hmhMetalFix: Bool? = nil
+    var hmhClearFix: Bool? = nil
     var dxmtMarshalFix: Bool? = nil
+    var d3d9YieldFix: Bool? = nil
     var requiredRuntimes: [String]? = nil
+    var epicMetalFix: Bool? = nil
     var baseline: GameBaseline?
     var updated = Date()
 }
@@ -49,6 +54,9 @@ struct GameProfileStore {
     static func identity(_ game: Game) -> String {
         if let id = game.steamAppID, !id.isEmpty, id.allSatisfy({ $0.isNumber }) {
             return "steam:" + id + (game.trialAppID == id ? ":trial" : "")
+        }
+        if let id = game.epicAppID, !id.isEmpty {
+            return "epic:" + id
         }
         return "local:" + game.id.uuidString
     }
@@ -69,10 +77,15 @@ struct GameProfileStore {
         return value
     }
     static func validate(_ profile: GameProfile) throws {
-        guard profile.dmcD9VKFix != true else { throw DeckError.message("DmC D9VK 경로는 성능 문제로 지원 중단했습니다. 직접 Metal 경로를 사용하세요.") }
+        guard profile.epicMetalFix != true || (profile.id == "epic:" + EpicRendererSupport.hogwartsID && profile.baseline == nil) else { throw DeckError.message("Epic Metal 시험은 보호 기준 없는 정확한 호그와트 Epic ID에만 허용됩니다.") }
         guard profile.dmcMetalFix != true || (profile.id == "steam:220440" && profile.baseline == nil) else { throw DeckError.message("DmC 직접 Metal 보완은 보호 기준이 없는220440 프로필에만 적용할 수 있습니다.") }
         guard profile.dmcClearFix != true || (profile.id == "steam:220440" && profile.dmcMetalFix == true && profile.baseline == nil) else { throw DeckError.message("DmC Clear experiment requires the exact unprotected direct Metal profile.") }
+        guard profile.dmcSrgbFix != true || (profile.id == "steam:220440" && profile.dmcMetalFix == true && profile.dmcClearFix == true && profile.baseline == nil) else { throw DeckError.message("DmC sRGB experiment requires exact unprotected220440 with native Clear fix.") }
+        guard profile.dmcQueryYieldFix != true || (profile.id == "steam:220440" && profile.dmcMetalFix == true && profile.dmcClearFix == true && profile.dmcSrgbFix == true && profile.baseline == nil) else { throw DeckError.message("DmC query-yield fix requires exact unprotected220440 with sRGB fix.") }
+        guard profile.hmhMetalFix != true || (profile.id == "steam:214830" && profile.baseline == nil) else { throw DeckError.message("용사30 직접 Metal 후보는 보호 기준이 없는 exact App ID214830에만 적용할 수 있습니다.") }
+        guard profile.hmhClearFix != true || (profile.id == "steam:214830" && profile.hmhMetalFix == true && profile.baseline == nil) else { throw DeckError.message("용사30 Clear 후보는 exact App ID214830 직접 Metal 프로필에만 적용할 수 있습니다.") }
         guard profile.dxmtMarshalFix != true || (profile.id == "steam:601150" && profile.steamRenderer == .dxmt && profile.baseline == nil) else { throw DeckError.message("GS/TS 보완판은 보호 기준이 없는 DMC5 DXMT 프로필에만 적용할 수 있습니다.") }
+        guard profile.d3d9YieldFix != true || (profile.id.hasPrefix("steam:") && profile.baseline == nil) else { throw DeckError.message("D3D9 CPU 스핀 완화(d3d9YieldFix)는 보호 기준이 없는 Steam 프로필에만 적용할 수 있습니다.") }
         guard Set(profile.requiredRuntimes ?? []).isSubset(of: Set(DependencyCatalog.packages.map(\.id))) else { throw DeckError.message("지원하지 않는 필수 런타임 ID입니다.") }
         guard Set(profile.environment.keys).isSubset(of: keys),
               profile.environment.values.allSatisfy({ $0.count <= 4096 && !$0.contains("\n") && !$0.contains("\0") }) else {
@@ -140,21 +153,52 @@ struct GameProfileStore {
         let root = DirectX12Support.runtimeRoot(forWine: plan.executable.path)
         if let root {
             if SharedSteamRuntime.isRuntime(plan.executable.path), let prefix = plan.environment["WINEPREFIX"] {
-                let selected = try SharedSteamRuntime.selection(appID: game.steamAppID, prefix: URL(fileURLWithPath: prefix))
+                let selected = try SharedSteamRuntime.selection(appID: game.steamAppID ?? game.epicAppID, prefix: URL(fileURLWithPath: prefix))
                 settings["sharedRenderer"] = selected
+                if let id = game.epicAppID {
+                    settings["epicIdentity"] = "epic:" + id
+                    settings["epicExecutableRules"] = try EpicRendererSupport.executableRules(id: id, prefix: URL(fileURLWithPath: prefix))
+                    runtime["epic-renderer-marker"] = try fingerprint(URL(fileURLWithPath: prefix).appendingPathComponent("drive_c/ProgramData/MacDeck/epic-renderers.json"))
+                }
                 for name in SharedSteamRuntime.modules {
                     runtime["shared-prefix/" + name] = try fingerprint(URL(fileURLWithPath: prefix).appendingPathComponent("drive_c/windows/system32/" + name + ".dll"))
                     let backend = selected == "dxmt" && ["d3d12", "d3d12core"].contains(name) ? "vkd3d" : selected
                     runtime["shared-component/" + name] = try fingerprint(root.appendingPathComponent("lib/wine/x86_64-windows/" + (try SharedSteamRuntime.component(appID: game.steamAppID, module: name, prefix: URL(fileURLWithPath: prefix), renderer: backend))))
                 }
                 if game.steamAppID == "220440", try SharedSteamRuntime.dmcMetalEnabled(prefix: URL(fileURLWithPath: prefix)) {
-                    settings["dmcMetalFix"] = try SharedSteamRuntime.dmcClearEnabled(prefix: URL(fileURLWithPath: prefix)) ? "dxmt-clear-v2" : "dxmt-v1"
+                    settings["dmcMetalFix"] = try SharedSteamRuntime.dmcMetalPatch(prefix: URL(fileURLWithPath: prefix)) ?? "dxmt-v1"
+                    if settings["dmcMetalFix"] == "dxmt-bind-v3" {
+                        runtime["dmc-metal-clear-binding"] = try fingerprint(root.appendingPathComponent("lib/wine/i386-windows/macdeck_dmc_dxmt_clear_v3.dll"))
+                    }
+                    if settings["dmcMetalFix"] == "dxmt-srgb-v4" {
+                        runtime["dmc-metal-srgb"] = try fingerprint(root.appendingPathComponent("lib/wine/i386-windows/macdeck_dmc_dxmt_srgb_v4.dll"))
+                    }
+                    if settings["dmcMetalFix"] == "dxmt-smooth-v5" {
+                        runtime["dmc-metal-srgb"] = try fingerprint(root.appendingPathComponent("lib/wine/i386-windows/macdeck_dmc_dxmt_srgb_v4.dll"))
+                        runtime["dmc-query-yield"] = try fingerprint(root.appendingPathComponent("lib/wine/i386-windows/macdeck_dmc_query_yield_v1.dll"))
+                    }
                     runtime["dmc-metal-router"] = try fingerprint(root.appendingPathComponent("lib/wine/i386-windows/d3d9.dll"))
                     runtime["dmc-metal-prefix-router"] = try fingerprint(URL(fileURLWithPath: prefix).appendingPathComponent("drive_c/windows/syswow64/d3d9.dll"))
                     runtime["dmc-metal-prefix-alias"] = try fingerprint(URL(fileURLWithPath: prefix).appendingPathComponent("drive_c/windows/syswow64/wm_dmc001.dll"))
                     for relative in ["i386-windows/macdeck_dmc_dxmt_v1.dll", "i386-windows/wm_dmc001.dll", "x86_64-unix/wm_dmc001.so"] {
                         runtime["dmc-metal/" + relative] = try fingerprint(root.appendingPathComponent("lib/wine/" + relative))
                     }
+                }
+                if game.steamAppID == "214830", try SharedSteamRuntime.hmhMetalEnabled(prefix: URL(fileURLWithPath: prefix)) {
+                    settings["hmhMetalFix"] = try SharedSteamRuntime.hmhMetalPatch(prefix: URL(fileURLWithPath: prefix)) ?? "dxmt-v1"
+                    runtime["hmh-metal-router"] = try fingerprint(root.appendingPathComponent("lib/wine/i386-windows/d3d9.dll"))
+                    runtime["hmh-metal-prefix-router"] = try fingerprint(URL(fileURLWithPath: prefix).appendingPathComponent("drive_c/windows/syswow64/d3d9.dll"))
+                    runtime["hmh-metal"] = try fingerprint(root.appendingPathComponent("lib/wine/i386-windows/macdeck_hmh_dxmt_v1.dll"))
+                    if settings["hmhMetalFix"] == "dxmt-clear-v2" {
+                        runtime["hmh-metal-clear"] = try fingerprint(root.appendingPathComponent("lib/wine/i386-windows/macdeck_hmh_dxmt_clear_v2.dll"))
+                    }
+                    for relative in ["i386-windows/wm_dmc001.dll", "x86_64-unix/wm_dmc001.so"] {
+                        runtime["hmh-metal/" + relative] = try fingerprint(root.appendingPathComponent("lib/wine/" + relative))
+                    }
+                }
+                if let appID = game.steamAppID, try SharedSteamRuntime.d3d9YieldEnabled(prefix: URL(fileURLWithPath: prefix), appID: appID) {
+                    settings["d3d9YieldFix"] = "true"
+                    runtime["d3d9-yield-helper"] = try fingerprint(root.appendingPathComponent("lib/wine/i386-windows/macdeck_d3d9_yield_helper.dll"))
                 }
                 if selected == "metal" {
                     runtime["shared-metal-framework"] = try fingerprint(root.appendingPathComponent("lib/external/D3DMetal.framework/Versions/A/D3DMetal"))

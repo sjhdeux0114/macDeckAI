@@ -20,6 +20,15 @@ struct DependencyAttempt: Codable {
 /// Only Microsoft's pinned catalog is executable. VDF contributes requirements,
 /// never executable paths, arguments, registry writes or success markers.
 enum DependencyDiscovery {
+    /// Side-by-side VC families are prepared before Epic starts, including newly installed games.
+    /// .NET families are in-place upgrades and remain exact-game requirements, never blanket installs.
+    static func epicPlan(games: [Game], profiles: [GameProfile]) throws -> [DependencyNeed] {
+        var combined = Dictionary(uniqueKeysWithValues: try plan(games: games, profiles: profiles).map { ($0.packageID, Set($0.appIDs)) })
+        for package in DependencyCatalog.packages where !package.isCLR {
+            combined[package.id, default: []].insert("epic:runtime-baseline-v1")
+        }
+        return combined.keys.sorted().map { DependencyNeed(packageID: $0, appIDs: combined[$0]!.sorted()) }
+    }
     static func packageID(path: String, hint: String) -> String? {
         let p = path.lowercased(), h = hint.lowercased()
         let text = p + " " + h
@@ -44,8 +53,10 @@ enum DependencyDiscovery {
         return nil // ambiguous redistributables must never guess a version.
     }
     static func requirements(game: Game, profile: GameProfile? = nil) throws -> [String] {
-        guard let id = game.steamAppID, !id.isEmpty, id.allSatisfy({ $0.isNumber }), let location = game.installedLocation else { return [] }
-        guard id != "228980" else { return [] } // Steamworks Shared Redistributables is inventory, not a game's requirements.
+        guard let location = game.installedLocation,
+              game.steamAppID != nil || game.epicAppID != nil else { return [] }
+        let id = GameProfileStore.identity(game)
+        guard game.steamAppID != "228980" else { return [] } // Steamworks Shared Redistributables is inventory, not a game's requirements.
         var found = Set((profile?.requiredRuntimes ?? []).filter { DependencyCatalog.package($0) != nil })
         let root = URL(fileURLWithPath: location)
         guard FileManager.default.fileExists(atPath: root.path) else { return [] }
@@ -84,7 +95,7 @@ enum DependencyDiscovery {
         var packages: [String: Set<String>] = [:]
         for game in games {
             for id in try requirements(game: game, profile: profiles.first { $0.id == GameProfileStore.identity(game) }) {
-                packages[id, default: []].insert(game.steamAppID!)
+                packages[id, default: []].insert(game.steamAppID ?? GameProfileStore.identity(game))
             }
         }
         let four = ["dotnet40", "dotnet45", "dotnet462", "dotnet472", "dotnet48"]
@@ -184,7 +195,12 @@ actor DependencyInstaller {
         }
         let number = ["2010":"100", "2012":"110", "2013":"120", "2022":"140"][year]!
         let system = windows.appendingPathComponent(package.architecture == "x64" ? "system32" : "syswow64")
-        return Self.nativePE(system.appendingPathComponent("msvcp" + number + ".dll"), architecture: package.architecture) && Self.nativePE(system.appendingPathComponent(number == "140" ? "vcruntime140.dll" : "msvcr" + number + ".dll"), architecture: package.architecture)
+        guard package.requiredSystemDLLs.allSatisfy({ Self.nativePE(system.appendingPathComponent($0), architecture: package.architecture) }) else { return false }
+        if number == "140" {
+            // UE bootstrap executables check the installed redistributable, not just DLL presence.
+            guard try await registry("HKLM\\Software\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\" + package.architecture, name: "Installed", arch: package.architecture) == "0x1" else { return false }
+        }
+        return true
     }
     func download(_ package: DependencyPackage) async throws -> URL {
         let cache = folder.appendingPathComponent("Cache")
@@ -277,7 +293,8 @@ actor DependencyInstaller {
         guard lock >= 0 else { throw DeckError.message("필수 런타임 잠금 파일을 열 수 없습니다.") }
         defer { flock(lock, LOCK_UN); close(lock) }
         guard flock(lock, LOCK_EX | LOCK_NB) == 0 else { throw DeckError.message("다른 필수 런타임 설치가 진행 중입니다.") }
-        guard !(try await SteamStorage(client: SteamClient(disk: disk)).isRunning(wine: wine.path)) else { return ["Steam 실행 중: 필수 런타임 설치는 다음 시작 때 진행합니다."] }
+        if prefix.standardizedFileURL == SteamClient(disk: disk).prefix.standardizedFileURL,
+           try await SteamStorage(client: SteamClient(disk: disk)).isRunning(wine: wine.path) { return ["Steam 실행 중: 필수 런타임 설치는 다음 시작 때 진행합니다."] }
         try await assertIdlePrefix()
         try await restorePendingVersion()
         var failures: [String] = []
@@ -310,9 +327,14 @@ actor DependencyInstaller {
                 try enableTracking()
                 let result = try await install(package, file: installer)
                 record.exitCode = result.0
+                var repaired = false
+                if [0,194,102].contains(result.0), try await !isInstalled(package) {
+                    repaired = try await repairEpicPayload(package, installer: installer)
+                }
                 guard [0,194,102].contains(result.0), try await isInstalled(package) else { throw DeckError.message("설치 후 버전/네이티브 파일 확인 실패 (종료 \(result.0)).") }
                 if package.isCLR { try await verifyCLR(package) }
                 record.status = "installed"; record.finished = Date(); record.detail = result.0 == 194 ? "Installed; prefix restart required." : "Native runtime postconditions verified; game play is unverified."
+                if repaired { record.detail += " Wine placeholders repaired from SHA-pinned Microsoft CAB payload; originals and source hashes preserved in NativeRepair." }
                 try save()
             } catch {
                 let wasInstalling = record.status == "installing"
@@ -365,9 +387,10 @@ extension DependencyInstaller {
     }
     func activateCLR(for games: [Game], needs: [DependencyNeed]) async throws {
         var applications: [String: [String]] = [:]
-        let allNames = games.map { ($0.steamAppID, Self.executableNames(in: URL(fileURLWithPath: $0.installedLocation ?? "/nonexistent"), clrOnly: false)) }
+        let allNames = games.map { ($0.steamAppID ?? GameProfileStore.identity($0), Self.executableNames(in: URL(fileURLWithPath: $0.installedLocation ?? "/nonexistent"), clrOnly: false)) }
         for game in games {
-            guard let id = game.steamAppID, let root = game.installedLocation else { continue }
+            guard game.steamAppID != nil || game.epicAppID != nil, let root = game.installedLocation else { continue }
+            let id = game.steamAppID ?? GameProfileStore.identity(game)
             let required = needs.filter { $0.appIDs.contains(id) }.compactMap { DependencyCatalog.package($0.packageID) }.filter(\.isCLR)
             guard !required.isEmpty else { continue }
             var ready = true
@@ -386,7 +409,9 @@ extension DependencyInstaller {
         guard !applications.isEmpty else { return }
         try enableTracking()
         let global = "HKCU\\Software\\Wine\\DllOverrides"
-        let paths = [global] + applications.values.flatMap { $0 }.sorted().map { "HKCU\\Software\\Wine\\AppDefaults\\" + $0 + "\\DllOverrides" }
+        let epicPrefix = EpicClient(disk: disk).prefix.standardizedFileURL == prefix.standardizedFileURL
+        // Epic's EOS installer also needs the builtin CLR loader: preserve its global policy.
+        let paths = (epicPrefix ? [] : [global]) + applications.values.flatMap { $0 }.sorted().map { "HKCU\\Software\\Wine\\AppDefaults\\" + $0 + "\\DllOverrides" }
         var backups: [String: String?] = [:]
         let backup = state.appendingPathComponent("clr-overrides-before.json")
         if FileManager.default.fileExists(atPath: backup.path) {

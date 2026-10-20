@@ -60,15 +60,22 @@ enum SelfTests {
         let planPerGameDX12 = try LaunchPlan.make(game: gamePerGameDX12, wine: "/usr/bin/true", disk: disk)
         try check(planPerGameDX12.environment["WINEDLLOVERRIDES"]?.contains("d3d12,d3d12core") == true, "game-specific graphicsBackend overrides global graphics backend")
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("xaudio2_7,xaudio2_8,xaudio2_9") == true && plan.environment["WINEDLLOVERRIDES"]?.contains("dsound=b") == true, "Windows launch plan overrides XAudio2 and DirectSound to Wine builtins")
-        var gameWithNativeD3D9 = game
-        gameWithNativeD3D9.d3d9Mode = .native
-        let planNativeD3D9 = try LaunchPlan.make(game: gameWithNativeD3D9, wine: "/usr/bin/true", disk: disk)
-        try check(planNativeD3D9.environment["WINEDLLOVERRIDES"]?.contains("d3d9=n,b") == true && planNativeD3D9.environment["WINE_D3D_CONFIG"] == nil, "game with native D3D9Mode enables d3d9=n,b override without WineD3D Vulkan override")
-        try check(planNativeD3D9.environment["DXVK_CONFIG_FILE"] != nil && planNativeD3D9.environment["WINEDLLOVERRIDES"]?.contains("d3dx9_42") == true, "game with native D3D9Mode configures DXVK_CONFIG_FILE and builtin D3DX9 fallback")
+        var legacyLibrary = try JSONSerialization.jsonObject(with: JSONEncoder().encode(decoded)) as! [String: Any]
+        var legacyGames = legacyLibrary["games"] as! [[String: Any]]
+        legacyGames[0]["d3d9Mode"] = "native"
+        legacyLibrary["games"] = legacyGames
+        try JSONSerialization.data(withJSONObject: legacyLibrary).write(to: disk.file, options: .atomic)
+        let migratedLegacy = try disk.load()
+        let migratedPlan = try LaunchPlan.make(game: migratedLegacy.games[0], wine: "/usr/bin/true", disk: disk)
+        try check(migratedPlan.environment["WINEDLLOVERRIDES"]?.contains("d3d9=b") == true
+                  && migratedPlan.environment["WINEDLLOVERRIDES"]?.contains("d3d9=n") == false
+                  && migratedPlan.environment["DXVK_CONFIG_FILE"] == nil
+                  && migratedPlan.environment["WINE_D3D_CONFIG"] == "renderer=vulkan", "legacy native D9VK values decode but can only launch through the builtin Direct3D 9 path")
+        try disk.save(decoded)
         try check(plan.environment["WINEDLLOVERRIDES"]?.contains("mfplat,mfreadwrite,mf,mfmediaengine,winegstreamer=b;quartz,amstream=b") == true, "Windows launch plan overrides Media Foundation and DirectShow to Wine builtins")
         try check(plan.environment["DXMT_CONFIG"]?.contains("ignoreMapFlagNoWait=True") == false && plan.environment["DXMT_CONFIG"]?.contains("handleAltTab=True") == true, "DXMT preserves NO_WAIT semantics and enables Alt-Tab handling")
         try check(plan.environment["SDL_RENDER_DRIVER"] == "direct3d11", "SDL games use the Direct3D 11 path")
-        try check(plan.environment["DXVK_LOG_PATH"] == disk.logs.path && plan.environment["DXVK_LOG_LEVEL"] == "info", "native DXVK/D9VK logs have a managed destination")
+        try check(plan.environment["DXVK_LOG_PATH"] == disk.logs.path && plan.environment["DXVK_LOG_LEVEL"] == "info", "graphics translation logs have a managed destination")
         let mixed = CompatibilityInspector.report(game: "Mixed", files: ["Game_Data/globalgamemanagers", "UnityPlayer.dll", "EasyAntiCheat/launcher.exe", "dinput8.dll"], imports: ["d3d9.dll"], architectures: ["x86"], truncated: false)
         try check(mixed.engines == ["Unity"] && mixed.findings.contains { $0.id == "d3d9-device" } && mixed.findings.contains { $0.id == "anticheat" } && mixed.findings.contains { $0.id == "native-proxy" }, "compatibility report separates engine, DX9, anti-cheat and proxy evidence")
         let unknown = CompatibilityInspector.report(game: "Unity Unreal Crysis", files: ["readme.txt"], imports: [], architectures: [], truncated: true)
@@ -315,6 +322,60 @@ enum SelfTests {
         try Data("changed candidate".utf8).write(to: selectedCandidate)
         try check(try GameProfileStore.baseline(game: dmc5Identity, plan: protectedPlan) != beforeCandidateChange, "DMC5 baseline detects a changed GS/TS candidate")
         try check(try GameProfileStore.baseline(game: protectedRE3, plan: protectedPlan) == beforeRE3CandidateChange, "DMC5 candidate changes preserve the RE3 runtime baseline")
+        var hmhProfile = try profiles.profile(steamIdentity)
+        try check(hmhProfile.hmhMetalFix != true, "Half Minute Hero direct Metal candidate defaults to disabled")
+        hmhProfile.hmhMetalFix = true
+        try profiles.update(hmhProfile); try sharedMap.writeMap()
+        try check(try SharedSteamRuntime.hmhMetalEnabled(prefix: mapPrefix) && !SharedSteamRuntime.dmcMetalEnabled(prefix: mapPrefix), "exact App ID214830 selects only its Direct Metal candidate")
+        let hmhCandidateDLL = sharedTestDLLs.deletingLastPathComponent().appendingPathComponent("i386-windows/macdeck_hmh_dxmt_v1.dll")
+        try FileManager.default.createDirectory(at: hmhCandidateDLL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("hmh direct metal candidate".utf8).write(to: hmhCandidateDLL)
+        let beforeHMHCandidate = try GameProfileStore.baseline(game: steamIdentity, plan: protectedPlan)
+        let beforeHMHRE3 = try GameProfileStore.baseline(game: protectedRE3, plan: protectedPlan)
+        try Data("changed hmh direct metal candidate".utf8).write(to: hmhCandidateDLL)
+        try check(try GameProfileStore.baseline(game: steamIdentity, plan: protectedPlan) != beforeHMHCandidate && GameProfileStore.baseline(game: protectedRE3, plan: protectedPlan) == beforeHMHRE3, "HMH candidate changes are detected without changing RE3 baseline")
+        var invalidHMH = hmhProfile; invalidHMH.id = "steam:220440"
+        var invalidHMHRejected = false
+        do { try GameProfileStore.validate(invalidHMH) } catch { invalidHMHRejected = true }
+        try check(invalidHMHRejected, "HMH direct Metal candidate rejects another exact App ID")
+        try check(hmhProfile.hmhClearFix != true, "HMH Clear candidate defaults to disabled")
+        hmhProfile.hmhClearFix = true
+        try profiles.update(hmhProfile); try sharedMap.writeMap()
+        try check(try SharedSteamRuntime.hmhMetalPatch(prefix: mapPrefix) == "dxmt-clear-v2", "exact App ID214830 selects its isolated Clear candidate")
+        let hmhClearDLL = hmhCandidateDLL.deletingLastPathComponent().appendingPathComponent("macdeck_hmh_dxmt_clear_v2.dll")
+        try Data("hmh clear candidate".utf8).write(to: hmhClearDLL)
+        let beforeHMHClear = try GameProfileStore.baseline(game: steamIdentity, plan: protectedPlan)
+        try Data("changed hmh clear candidate".utf8).write(to: hmhClearDLL)
+        try check(try GameProfileStore.baseline(game: steamIdentity, plan: protectedPlan) != beforeHMHClear && GameProfileStore.baseline(game: protectedRE3, plan: protectedPlan) == beforeHMHRE3, "HMH Clear changes are detected without changing RE3 baseline")
+        var missingHMHMetal = hmhProfile; missingHMHMetal.hmhMetalFix = false
+        var missingHMHMetalRejected = false
+        do { try GameProfileStore.validate(missingHMHMetal) } catch { missingHMHMetalRejected = true }
+        try check(missingHMHMetalRejected, "HMH Clear candidate requires its exact Direct Metal route")
+        hmhProfile.hmhClearFix = false
+        try profiles.update(hmhProfile); try sharedMap.writeMap()
+        try check(try SharedSteamRuntime.hmhMetalPatch(prefix: mapPrefix) == "dxmt-v1", "disabling HMH Clear restores its base Direct Metal candidate")
+        hmhProfile.hmhMetalFix = false
+        try profiles.update(hmhProfile); try sharedMap.writeMap()
+        try check(try !SharedSteamRuntime.hmhMetalEnabled(prefix: mapPrefix), "disabling HMH candidate removes its exact map entry")
+        try check(hmhProfile.d3d9YieldFix != true, "D3D9 CPU spin yield fix defaults to disabled")
+        hmhProfile.d3d9YieldFix = true
+        try profiles.update(hmhProfile); try sharedMap.writeMap()
+        try check(try SharedSteamRuntime.d3d9YieldEnabled(prefix: mapPrefix, appID: "214830"), "exact App ID214830 enables D3D9 yield fix in shared renderer map")
+        try check(try !SharedSteamRuntime.d3d9YieldEnabled(prefix: mapPrefix, appID: "952060"), "D3D9 yield fix is scoped and does not enable for RE3")
+        let yieldHelperDLL = sharedTestDLLs.deletingLastPathComponent().appendingPathComponent("i386-windows/macdeck_d3d9_yield_helper.dll")
+        try FileManager.default.createDirectory(at: yieldHelperDLL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("d3d9 yield helper candidate".utf8).write(to: yieldHelperDLL)
+        let beforeYieldHMH = try GameProfileStore.baseline(game: steamIdentity, plan: protectedPlan)
+        try Data("changed d3d9 yield helper candidate".utf8).write(to: yieldHelperDLL)
+        try check(try GameProfileStore.baseline(game: steamIdentity, plan: protectedPlan) != beforeYieldHMH && GameProfileStore.baseline(game: protectedRE3, plan: protectedPlan) == beforeHMHRE3, "D3D9 yield helper changes are detected without changing RE3 baseline")
+        var protectedWithYield = hmhProfile
+        protectedWithYield.baseline = beforeYieldHMH
+        var protectedYieldRejected = false
+        do { try GameProfileStore.validate(protectedWithYield) } catch { protectedYieldRejected = true }
+        try check(protectedYieldRejected, "D3D9 yield fix cannot be combined with protected baseline")
+        hmhProfile.d3d9YieldFix = false
+        try profiles.update(hmhProfile); try sharedMap.writeMap()
+        try check(try !SharedSteamRuntime.d3d9YieldEnabled(prefix: mapPrefix, appID: "214830"), "disabling D3D9 yield fix removes it from shared renderer map")
         var dmc9Profile = try profiles.profile(dmcIdentity)
         try check(dmc9Profile.dmcMetalFix != true, "DmC direct Metal adjustment defaults to disabled")
         dmc9Profile.dmcMetalFix = true
@@ -327,9 +388,15 @@ enum SelfTests {
         dmc9Profile.dmcClearFix = true
         try profiles.update(dmc9Profile)
         try sharedMap.writeMap()
-        try check(try SharedSteamRuntime.dmcClearEnabled(prefix: mapPrefix), "explicit DmC Clear experiment is written to its exact map entry")
+        try check(try SharedSteamRuntime.dmcClearEnabled(prefix: mapPrefix) && SharedSteamRuntime.dmcMetalPatch(prefix: mapPrefix) == "dxmt-bind-v3", "explicit DmC Clear experiment is written to its exact map entry")
         try check(try SharedSteamRuntime.component(appID: "601150", module: "d3d11", prefix: mapPrefix, renderer: "dxmt") == "macdeck_dxmt_gsts_v1_d3d11.dll", "DmC Clear experiment preserves DMC5 renderer")
         try check(try GameProfileStore.baseline(game: dmcIdentity, plan: protectedPlan) != beforeClear && GameProfileStore.baseline(game: protectedRE3, plan: protectedPlan) == beforeClearRE3, "DmC Clear map changes are detected while RE3 baseline is preserved")
+        let clearBindingDLL = sharedTestDLLs.deletingLastPathComponent().appendingPathComponent("i386-windows/macdeck_dmc_dxmt_clear_v3.dll")
+        try FileManager.default.createDirectory(at: clearBindingDLL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("binding candidate".utf8).write(to: clearBindingDLL)
+        let beforeBindingChange = try GameProfileStore.baseline(game: dmcIdentity, plan: protectedPlan)
+        try Data("changed binding candidate".utf8).write(to: clearBindingDLL)
+        try check(try GameProfileStore.baseline(game: dmcIdentity, plan: protectedPlan) != beforeBindingChange && GameProfileStore.baseline(game: protectedRE3, plan: protectedPlan) == beforeClearRE3, "native DmC Clear DLL changes are detected without changing RE3 baseline")
         var wrongClear = dmc9Profile; wrongClear.id = "steam:952060"; wrongClear.dmcMetalFix = false
         var wrongClearRejected = false
         do { try GameProfileStore.validate(wrongClear) } catch { wrongClearRejected = true }
@@ -338,14 +405,50 @@ enum SelfTests {
         var missingMetalRejected = false
         do { try GameProfileStore.validate(missingMetalClear) } catch { missingMetalRejected = true }
         try check(missingMetalRejected, "DmC Clear experiment requires private direct Metal")
+        try check(dmc9Profile.dmcSrgbFix != true, "DmC BC sRGB candidate defaults to disabled")
+        dmc9Profile.dmcSrgbFix = true
+        try profiles.update(dmc9Profile); try sharedMap.writeMap()
+        try check(try SharedSteamRuntime.dmcMetalPatch(prefix: mapPrefix) == "dxmt-srgb-v4" && SharedSteamRuntime.dmcClearEnabled(prefix: mapPrefix), "exact DmC sRGB candidate retains native Clear")
+        let srgbDLL = clearBindingDLL.deletingLastPathComponent().appendingPathComponent("macdeck_dmc_dxmt_srgb_v4.dll")
+        try Data("srgb candidate".utf8).write(to: srgbDLL)
+        let beforeSrgbChange = try GameProfileStore.baseline(game: dmcIdentity, plan: protectedPlan)
+        try Data("changed srgb candidate".utf8).write(to: srgbDLL)
+        try check(try GameProfileStore.baseline(game: dmcIdentity, plan: protectedPlan) != beforeSrgbChange && GameProfileStore.baseline(game: protectedRE3, plan: protectedPlan) == beforeClearRE3, "sRGB binary changes are detected only for DmC baseline")
+        var foreignSrgb = dmc9Profile; foreignSrgb.id = "steam:214830"
+        var foreignSrgbRejected = false
+        do { try GameProfileStore.validate(foreignSrgb) } catch { foreignSrgbRejected = true }
+        try check(foreignSrgbRejected, "DmC sRGB candidate cannot affect Half Minute Hero")
+        var noClearSrgb = dmc9Profile; noClearSrgb.dmcClearFix = false
+        var noClearSrgbRejected = false
+        do { try GameProfileStore.validate(noClearSrgb) } catch { noClearSrgbRejected = true }
+        try check(noClearSrgbRejected, "sRGB candidate requires native Clear fix")
+        try check(dmc9Profile.dmcQueryYieldFix != true, "DmC query-yield candidate defaults to disabled")
+        dmc9Profile.dmcQueryYieldFix = true
+        try profiles.update(dmc9Profile); try sharedMap.writeMap()
+        try check(try SharedSteamRuntime.dmcMetalPatch(prefix: mapPrefix) == "dxmt-smooth-v5" && SharedSteamRuntime.dmcClearEnabled(prefix: mapPrefix), "exact DmC query-yield candidate retains sRGB and native Clear")
+        let queryYieldDLL = clearBindingDLL.deletingLastPathComponent().appendingPathComponent("macdeck_dmc_query_yield_v1.dll")
+        try Data("query yield candidate".utf8).write(to: queryYieldDLL)
+        let beforeQueryYieldChange = try GameProfileStore.baseline(game: dmcIdentity, plan: protectedPlan)
+        try Data("changed query yield candidate".utf8).write(to: queryYieldDLL)
+        try check(try GameProfileStore.baseline(game: dmcIdentity, plan: protectedPlan) != beforeQueryYieldChange && GameProfileStore.baseline(game: protectedRE3, plan: protectedPlan) == beforeClearRE3, "query-yield binary changes are detected only for DmC baseline")
+        var foreignQueryYield = dmc9Profile; foreignQueryYield.id = "steam:214830"
+        var foreignQueryYieldRejected = false
+        do { try GameProfileStore.validate(foreignQueryYield) } catch { foreignQueryYieldRejected = true }
+        try check(foreignQueryYieldRejected, "DmC query-yield candidate cannot affect Half Minute Hero")
+        var noSrgbQueryYield = dmc9Profile; noSrgbQueryYield.dmcSrgbFix = false
+        var noSrgbQueryYieldRejected = false
+        do { try GameProfileStore.validate(noSrgbQueryYield) } catch { noSrgbQueryYieldRejected = true }
+        try check(noSrgbQueryYieldRejected, "query-yield candidate requires sRGB fix")
+        dmc9Profile.dmcQueryYieldFix = false
+        try profiles.update(dmc9Profile); try sharedMap.writeMap()
+        try check(try SharedSteamRuntime.dmcMetalPatch(prefix: mapPrefix) == "dxmt-srgb-v4", "disabling query-yield candidate restores v4")
+        dmc9Profile.dmcSrgbFix = false
+        try profiles.update(dmc9Profile); try sharedMap.writeMap()
+        try check(try SharedSteamRuntime.dmcMetalPatch(prefix: mapPrefix) == "dxmt-bind-v3", "disabling sRGB candidate restores v3")
         dmc9Profile.dmcClearFix = false
         try profiles.update(dmc9Profile)
         try sharedMap.writeMap()
         try check(try !SharedSteamRuntime.dmcClearEnabled(prefix: mapPrefix), "disabling DmC Clear experiment restores original direct Metal map")
-        var retiredDmc9 = dmc9Profile; retiredDmc9.dmcD9VKFix = true
-        var retiredDmc9Rejected = false
-        do { try GameProfileStore.validate(retiredDmc9) } catch { retiredDmc9Rejected = true }
-        try check(retiredDmc9Rejected, "retired DmC D9VK route cannot be enabled again")
         var invalidDmc9 = dmc9Profile; invalidDmc9.id = "steam:601150"
         var invalidDmc9Rejected = false
         do { try GameProfileStore.validate(invalidDmc9) } catch { invalidDmc9Rejected = true }
@@ -545,6 +648,65 @@ enum SelfTests {
         try check(fixedWine.count == oldWine.count && fixedWine.prefix(6) == oldWine.prefix(6) && fixedWine.suffix(4) == oldWine.suffix(4), "Game Mode patch preserves executable size and bytes outside the plist")
         try check(fixedPlist["LSSupportsGameMode"] as? Bool == true && fixedPlist["LSApplicationCategoryType"] as? String == "public.app-category.games" && fixedPlist["LSUIElement"] == nil, "Game Mode opt-in fits the actual 936-byte Wine plist instead of silently skipping")
         try check(fixedPlist["NSPrincipalClass"] as? String == "WineApplication" && RuntimeUpdater.patchWineGameModePlist(fixedWine) == fixedWine, "Game Mode patch preserves Wine application class and is idempotent")
+        let epicClient = EpicClient(disk: disk)
+        try check(epicClient.prefix.path == disk.bottles.appendingPathComponent("EpicGames").path, "Epic prefix is located in dedicated Bottles/EpicGames folder")
+        try check(EpicClient.arguments.contains("-SkipBuildPatchPrereq") && EpicClient.arguments.contains("-ForceDX11"), "Epic client launches with DirectX prerequisite skip and forced DX11 Metal backend")
+        let launcherFixture = epicClient.prefix.appendingPathComponent("drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe")
+        try FileManager.default.createDirectory(at: launcherFixture.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data([0x4d,0x5a]).write(to: launcherFixture)
+        let launcherEntry = try epicClient.entry()
+        try check(epicClient.requiresDependencies(launcherEntry), "Epic library launcher entry cannot bypass prerequisite preparation")
+        var foreignLauncher = launcherEntry; foreignLauncher.prefix = disk.bottles.appendingPathComponent("OtherEpic").path
+        try check(!epicClient.requiresDependencies(foreignLauncher), "Epic prerequisite gate is limited to the managed Epic bottle")
+        var epicGame = game
+        epicGame.epicAppID = "Sugar"
+        try check(GameProfileStore.identity(epicGame) == "epic:Sugar" && GameProfileStore.identity(epicGame) != GameProfileStore.identity(game), "Epic Game identity is prefixed with epic: and separated from generic games")
+        let epicDosdevices = epicClient.prefix.appendingPathComponent("dosdevices")
+        try FileManager.default.createDirectory(at: epicDosdevices, withIntermediateDirectories: true)
+        try storage.syncTo(prefix: epicClient.prefix)
+        try check((try? FileManager.default.destinationOfSymbolicLink(atPath: epicDosdevices.appendingPathComponent("d:").path)) == storage.mappingRoot.path, "external storage maps directly into Epic dosdevices")
+        let epicManifests = epicClient.prefix.appendingPathComponent("drive_c/ProgramData/Epic/EpicGamesLauncher/Data/Manifests")
+        try FileManager.default.createDirectory(at: epicManifests, withIntermediateDirectories: true)
+        let epicGameExe = storage.mappingRoot.appendingPathComponent("EpicGames/Cyberpunk2077/bin/x64/Cyberpunk2077.exe")
+        try FileManager.default.createDirectory(at: epicGameExe.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data([0x4d, 0x5a]).write(to: epicGameExe)
+        let manifestJSON = """
+        {
+            "AppName": "Sugar",
+            "DisplayName": "Cyberpunk 2077",
+            "InstallLocation": "D:\\\\EpicGames\\\\Cyberpunk2077",
+            "LaunchExecutable": "bin\\\\x64\\\\Cyberpunk2077.exe"
+        }
+        """
+        try Data(manifestJSON.utf8).write(to: epicManifests.appendingPathComponent("Sugar.item"))
+        let discoveredEpicGames = try epicClient.installedGames()
+        try check(discoveredEpicGames.count == 1 && discoveredEpicGames[0].epicAppID == "Sugar" && discoveredEpicGames[0].name == "Cyberpunk 2077" && discoveredEpicGames[0].path == epicGameExe.path && discoveredEpicGames[0].prefix == epicClient.prefix.path, "Epic JSON manifests discover installed games on mapped external drives")
+        storage.unlinkFrom(prefix: epicClient.prefix)
+        try check((try? FileManager.default.destinationOfSymbolicLink(atPath: epicDosdevices.appendingPathComponent("d:").path)) == nil && FileManager.default.fileExists(atPath: epicGameExe.path), "unlinkFrom cleanly removes Epic drive mapping while preserving external game files")
+        let fakeMSI = root.appendingPathComponent("fake-setup.msi")
+        try Data("fake-msi".utf8).write(to: fakeMSI)
+        var msiGame = Game(name: "MSI Setup", path: fakeMSI.path, kind: .windows)
+        msiGame.arguments = ["/qn"]
+        let msiPlan = try LaunchPlan.make(game: msiGame, wine: fakeWineBin.path, disk: disk)
+        try check(msiPlan.arguments.starts(with: ["msiexec", "/i", fakeMSI.path, "/qn"]), "LaunchPlan translates .msi Windows installer into wine msiexec invocation")
+        try epicClient.prepareEOSDirectories()
+        try check(FileManager.default.fileExists(atPath: epicClient.prefix.appendingPathComponent("drive_c/ProgramData/Epic/EpicOnlineServices/EOSInstaller/Logs").path), "prepareEOSDirectories creates required EOS log and binary target paths")
+        try check(!epicClient.eosInstalled, "EOS defaults to not installed on fresh bottle")
+        try FileManager.default.createDirectory(at: epicClient.eosUserHelper.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data([0x4d, 0x5a]).write(to: epicClient.eosUserHelper)
+        try check(epicClient.eosInstalled, "EpicClient correctly detects installed Epic Online Services via UserHelper")
+        let fakeLauncherDir = epicClient.prefix.appendingPathComponent("drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64")
+        try FileManager.default.createDirectory(at: fakeLauncherDir, withIntermediateDirectories: true)
+        let fakeLauncherExe = fakeLauncherDir.appendingPathComponent("EpicGamesLauncher.exe")
+        let origTestBytes = Data([0x90, 0x90]) + Data([0x84, 0xc0, 0x0f, 0x85, 0x82, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x0d, 0xba, 0xf7, 0xe8, 0x01, 0x48]) + Data([0xcc, 0xcc])
+        try origTestBytes.write(to: fakeLauncherExe)
+        let patchApplied = epicClient.applyDirectoryPreparationPatch()
+        let patchedBytes = try Data(contentsOf: fakeLauncherExe)
+        let expectedPatchBytes = Data([0x90, 0x90]) + Data([0x84, 0xc0, 0xe9, 0x83, 0x00, 0x00, 0x00, 0x90, 0x48, 0x8b, 0x0d, 0xba, 0xf7, 0xe8, 0x01, 0x48]) + Data([0xcc, 0xcc])
+        let origBak = fakeLauncherExe.deletingPathExtension().appendingPathExtension("exe.orig")
+        try check(patchApplied && patchedBytes == expectedPatchBytes && FileManager.default.fileExists(atPath: origBak.path), "applyDirectoryPreparationPatch safely replaces conditional jump with jmp and preserves backup")
+        try check(epicClient.applyDirectoryPreparationPatch(), "applyDirectoryPreparationPatch is idempotent on already patched binary")
+        try EpicRendererTests.run(root: root) { value, label in try check(value, label) }
         print("\(checks) checks passed")
     }
 }

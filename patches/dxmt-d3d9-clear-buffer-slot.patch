@@ -1,0 +1,19 @@
+--- a/src/d3d9/d3d9_clear_quad.cpp
++++ b/src/d3d9/d3d9_clear_quad.cpp
+@@ -1,6 +1,7 @@
+ #include "d3d9_clear_quad.hpp"
+ #include "dxmt_context.hpp"
+ #include "dxmt_format.hpp"
++#include "dxmt_command_constants.hpp"
+ #include "log/log.hpp"
+ 
+ namespace dxmt {
+@@ -245,7 +246,7 @@
+   memcpy(temp, color.data(), sizeof(color));
+   setcolor.bytes.set(temp);
+   setcolor.length = sizeof(color);
+-  setcolor.index = 0;
++  setcolor.index = kCustomBufferArgumentIndex0;
+ 
+   auto &draw = ctx.encodeRenderCommand<wmtcmd_render_draw>();
+   draw.type = WMTRenderCommandDraw;

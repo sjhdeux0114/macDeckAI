@@ -19,6 +19,14 @@ struct DependencyPackage: Codable, Hashable {
         return ["/q", "/norestart"]
     }
     var isCLR: Bool { family.hasPrefix("dotnet") }
+    var requiredSystemDLLs: [String] {
+        let versions = ["vcrun2010":"100", "vcrun2012":"110", "vcrun2013":"120"]
+        if let number = versions[family] { return ["msvcp" + number + ".dll", "msvcr" + number + ".dll"] }
+        if family == "vcrun2022" {
+            return ["msvcp140.dll", "vcruntime140.dll"] + (architecture == "x64" ? ["vcruntime140_1.dll"] : [])
+        }
+        return []
+    }
 }
 enum DependencyCatalog {
     static let packages: [DependencyPackage] = [

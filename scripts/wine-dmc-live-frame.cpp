@@ -33,7 +33,7 @@ static HRESULT WINAPI present(IDirect3DDevice9*d,const RECT*a,const RECT*b,HWND 
  return original(d,a,b,window,data);
 }
 static DWORD WINAPI setup(void*){
- HMODULE module=GetModuleHandleW(L"macdeck_dmc_dxmt_v1.dll");if(!module){writeStatus("not DmC private Metal\n");return 1;}
+ HMODULE module=GetModuleHandleW(L"macdeck_dmc_dxmt_clear_v3.dll");if(!module)module=GetModuleHandleW(L"macdeck_dmc_dxmt_v1.dll");if(!module){writeStatus("not DmC private Metal\n");return 1;}
  // Locked release v0.4-d3d9; caller additionally checks the complete SHA256.
  auto dos=reinterpret_cast<IMAGE_DOS_HEADER*>(module);auto nt=reinterpret_cast<IMAGE_NT_HEADERS*>((char*)module+dos->e_lfanew);
  if(dos->e_magic!=IMAGE_DOS_SIGNATURE||nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR32_MAGIC||nt->FileHeader.TimeDateStamp!=0x6a85139a||nt->OptionalHeader.SizeOfImage!=0x26a000){writeStatus("wrong PE architecture\n");return 2;}
